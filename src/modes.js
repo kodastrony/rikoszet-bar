@@ -14,6 +14,7 @@ export function createModes({ scene, groups, onModeChange }) {
   let mode = 'full';
   let ints = { parterInt: null, pietroInt: null };
   let busy = false;
+  let pending = null; // klik w trakcie animacji nie ginie — wykona się po niej
 
   // ── pierścień podświetlenia strefy ─────────────────────────
   const ringMat = new THREE.MeshBasicMaterial({
@@ -79,7 +80,11 @@ export function createModes({ scene, groups, onModeChange }) {
   }
 
   function set(next, { animate = true } = {}) {
-    if (next === mode || busy || !VISIBILITY[next]) return Promise.resolve(mode);
+    if (!VISIBILITY[next] || next === mode) return Promise.resolve(mode);
+    if (busy) {
+      pending = next;
+      return Promise.resolve(mode);
+    }
     const prevVis = VISIBILITY[mode];
     const nextVis = VISIBILITY[next];
     mode = next;
@@ -101,11 +106,22 @@ export function createModes({ scene, groups, onModeChange }) {
       if (prevVis[key] && nextVis[key]) grp.visible = true;
     }
     return new Promise((resolve) => {
-      let pending = 0;
-      const doneOne = () => { if (--pending <= 0) { busy = false; resolve(mode); } };
+      let waiting = 0;
+      const doneOne = () => {
+        if (--waiting > 0) return;
+        busy = false;
+        resolve(mode);
+        if (pending && pending !== mode) {
+          const p = pending;
+          pending = null;
+          set(p);
+        } else {
+          pending = null;
+        }
+      };
       if (!hides.length && !shows.length) { busy = false; resolve(mode); return; }
       hides.forEach(([grp, lift]) => {
-        pending++;
+        waiting++;
         tween({
           dur: 360,
           ease: easeInOutCubic,
@@ -114,7 +130,7 @@ export function createModes({ scene, groups, onModeChange }) {
         });
       });
       shows.forEach(([grp, lift]) => {
-        pending++;
+        waiting++;
         grp.visible = true;
         grp.position.y = lift;
         tween({

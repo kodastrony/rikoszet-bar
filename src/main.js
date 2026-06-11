@@ -43,7 +43,7 @@ async function init() {
   let lowPower = /swiftshader|llvmpipe|software/i.test(gpuName);
   const isMobile = matchMedia('(pointer: coarse)').matches || vw() < 820;
 
-  renderer.setPixelRatio(lowPower ? 0.75 : Math.min(window.devicePixelRatio, isMobile ? 1.6 : 2));
+  renderer.setPixelRatio(lowPower ? 0.75 : Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2));
   renderer.setSize(vw(), vh());
   renderer.shadowMap.enabled = !lowPower;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -130,19 +130,45 @@ async function init() {
   }, 150);
 
   // ── ruch kamery ────────────────────────────────────────────
+  // przesunięcie kadru, gdy otwarty jest panel (obiekt ląduje w lewej części)
+  let panelOffset = false;
+  function applyViewOffset() {
+    const W = vw(), H = vh();
+    if (panelOffset) {
+      if (W > 980) camera.setViewOffset(W, H, Math.min(225, W * 0.16), 0, W, H);
+      else camera.setViewOffset(W, H, 0, Math.round(H * 0.15), W, H);
+    } else {
+      camera.clearViewOffset();
+    }
+  }
+
+  // powolny filmowy dryf wokół celu (gdy klient czyta panel)
+  let driftActive = false;
+  const UP = new THREE.Vector3(0, 1, 0);
+  const stopDrift = () => { driftActive = false; };
+  controls.addEventListener('start', stopDrift);
+
   let cancelFly = null;
-  function flyTo(view, dur = 1400, after) {
+  const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _mid = new THREE.Vector3();
+  function flyTo(view, dur = 1500, after) {
     cancelFly?.();
+    stopDrift();
     controls.enabled = false;
     const p0 = camera.position.clone();
     const t0 = controls.target.clone();
     const p1 = new THREE.Vector3(...(view.pos.toArray ? view.pos.toArray() : view.pos));
     const t1 = new THREE.Vector3(...(view.target.toArray ? view.target.toArray() : view.target));
+    const dist = p0.distanceTo(p1);
+    _mid.lerpVectors(p0, p1, 0.5);
+    _mid.y += Math.min(4.5, Math.max(0.25, dist * 0.075)); // łagodny łuk
+    const mid = _mid.clone();
     cancelFly = tween({
-      dur,
+      dur: Math.min(2400, dur + dist * 8), // dalsze przeloty trwają odrobinę dłużej
       ease: easeInOutCubic,
       update: (e) => {
-        camera.position.lerpVectors(p0, p1, e);
+        _a.lerpVectors(p0, mid, e);
+        _b.lerpVectors(mid, p1, e);
+        camera.position.lerpVectors(_a, _b, e);
         controls.target.lerpVectors(t0, t1, e);
       },
       done: () => {
@@ -160,13 +186,18 @@ async function init() {
     if (!a) return;
     controls.autoRotate = false;
     if (modeBeforeFocus === null) modeBeforeFocus = modes.mode;
+    panelOffset = true;
+    applyViewOffset();
     modes.set(a.view.mode);
     modes.highlight(a.view.zone);
-    flyTo(a.view.camera, 1500);
+    flyTo(a.view.camera, 1500, () => { driftActive = true; });
   }
   function resetCamera() {
     const back = modeBeforeFocus ?? modes.mode;
     modeBeforeFocus = null;
+    panelOffset = false;
+    applyViewOffset();
+    stopDrift();
     modes.highlight(null);
     modes.set(back);
     flyTo(MODE_VIEWS[back], 1300);
@@ -174,6 +205,9 @@ async function init() {
   function setMode(m) {
     if (!story.finished() || m === modes.mode) return;
     modeBeforeFocus = null;
+    panelOffset = false;
+    applyViewOffset();
+    stopDrift();
     modes.highlight(null);
     modes.set(m);
     flyTo(MODE_VIEWS[m], 1200);
@@ -223,6 +257,7 @@ async function init() {
   // ── pętla + rozmiar ────────────────────────────────────────
   function onResize() {
     camera.aspect = vw() / vh();
+    applyViewOffset(); // offset liczony od bieżącego rozmiaru
     camera.updateProjectionMatrix();
     renderer.setSize(vw(), vh());
     composer.setSize(vw(), vh());
@@ -232,14 +267,23 @@ async function init() {
   addEventListener('resize', onResize);
 
   let lastW = vw(), lastH = vh();
+  let lastNow = performance.now();
   function tick(now) {
     if (lastW !== vw() || lastH !== vh()) {
       lastW = vw(); lastH = vh();
       onResize();
     }
+    const dt = Math.min(60, now - lastNow);
+    lastNow = now;
     maybeDowngrade(now);
     updateTweens(now);
     story.update();
+    if (driftActive && !cancelFly) {
+      // bardzo wolny obrót w lewo wokół celu — klient widzi więcej, czytając
+      const off = camera.position.clone().sub(controls.target);
+      off.applyAxisAngle(UP, dt * 0.000042);
+      camera.position.copy(controls.target).add(off);
+    }
     controls.update();
     if (lowPower && night.t === 0) {
       renderer.render(scene, camera);
@@ -250,18 +294,21 @@ async function init() {
   }
   renderer.setAnimationLoop(tick);
 
-  // gdy karta jest ukryta, rAF stoi — podtrzymujemy render interwałem
-  let hiddenTimer = null;
-  function syncHiddenLoop() {
-    if (document.hidden && !hiddenTimer) {
-      hiddenTimer = setInterval(() => tick(performance.now()), 250);
-    } else if (!document.hidden && hiddenTimer) {
-      clearInterval(hiddenTimer);
-      hiddenTimer = null;
-    }
+  // DEV: gdy karta jest ukryta, rAF stoi — podtrzymujemy render interwałem
+  // (w produkcji oszczędzamy baterię i nic nie renderujemy w tle)
+  if (import.meta.env.DEV) {
+    let hiddenTimer = null;
+    const syncHiddenLoop = () => {
+      if (document.hidden && !hiddenTimer) {
+        hiddenTimer = setInterval(() => tick(performance.now()), 250);
+      } else if (!document.hidden && hiddenTimer) {
+        clearInterval(hiddenTimer);
+        hiddenTimer = null;
+      }
+    };
+    document.addEventListener('visibilitychange', syncHiddenLoop);
+    syncHiddenLoop();
   }
-  document.addEventListener('visibilitychange', syncHiddenLoop);
-  syncHiddenLoop();
 
   if (import.meta.env.DEV) {
     window.__rks = { renderer, scene, camera, controls, composer, night, modes, tick, flyTo, story, MODE_VIEWS, openAttraction, setMode };

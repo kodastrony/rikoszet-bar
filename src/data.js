@@ -16,32 +16,22 @@ export const BRAND = {
   ],
 };
 
-// ── Historia do scrollowanego intra ──────────────────────────
+// ── Historia do scrollowanego intra (krótko i konkretnie) ────
 export const STORY = [
   {
     year: '1926',
-    title: 'Rozlewnia rusza',
-    text: 'Przy Słodowej 8 Browar Miejski stawia rozlewnię. Cegła, stalowe okna i zapach słodu niosący się przez całą wyspę.',
-  },
-  {
-    year: '1974',
-    title: 'Cisza i kurz',
-    text: 'Spółdzielnia zamienia hale w magazyny części zamiennych. O budynku pamiętają już głównie gołębie.',
-  },
-  {
-    year: '2019',
-    title: 'Kupujemy ruinę',
-    text: 'Licytacja trwa czterdzieści minut. Wychodzimy z kluczami, pękniętą szybą i planem szalonym jak rykoszet.',
+    title: 'Rozlewnia Browaru Miejskiego',
+    text: 'Cegła, stal i słód. Przez pół wieku stąd wyjeżdżały skrzynki piwa na całe miasto.',
   },
   {
     year: '2021',
-    title: 'Wielkie odkurzanie',
-    text: 'Dwa lata renowacji: odsłaniamy cegłę spod farby, ratujemy stalowe okna i znajdujemy skrzynię porcelanowych kapsli.',
+    title: 'Dwa lata renowacji',
+    text: 'Odsłaniamy cegłę spod farby, ratujemy stalowe okna i strop. Budynek dostaje drugie życie.',
   },
   {
     year: '2024',
-    title: 'Pierwszy break',
-    text: 'RIKOSZET otwiera drzwi. Pierwsza bila pada o 18:07 — i jakoś tak już tu zostajemy.',
+    title: 'Otwieramy RIKOSZET',
+    text: 'Bilard, rzutki, scena i bar pod jednym dachem. Pierwsza bila pada o 18:07.',
   },
 ];
 

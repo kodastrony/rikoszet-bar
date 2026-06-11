@@ -288,6 +288,53 @@ export function buildBar(scene) {
     groups.parter.add(mesh(new THREE.BoxGeometry(1.8, 2.55, 0.1), steelDark, -6.5, 1.3, BZ + 0.12));
   }
 
+  // kinkiety między oknami parteru (świecą nocą)
+  [-6.2, -2.6, 1.0].forEach((x) => {
+    groups.parter.add(mesh(new THREE.BoxGeometry(0.07, 0.07, 0.26), steelDark, x, 3.5, FZ + 0.12));
+    groups.parter.add(mesh(new THREE.CylinderGeometry(0.085, 0.13, 0.16, 10), doorGreen, x, 3.42, FZ + 0.26));
+    groups.parter.add(mesh(new THREE.SphereGeometry(0.06, 8, 6), bulbMat, x, 3.32, FZ + 0.26, { cast: false }));
+  });
+
+  // rynny spustowe na narożnikach frontu (parter + piętro osobno, by cięcie działało)
+  const zinc = new THREE.MeshStandardMaterial({ color: 0x6a7074, roughness: 0.55, metalness: 0.35 });
+  [-9.55, 9.55].forEach((x) => {
+    groups.parter.add(mesh(new THREE.CylinderGeometry(0.055, 0.055, 4.15, 8), zinc, x, 2.3, FZ + 0.12));
+    groups.parter.add(mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.34, 8), zinc, x, 0.18, FZ + 0.21, { rx: 0.9 }));
+    groups.pietro.add(mesh(new THREE.CylinderGeometry(0.055, 0.055, 3.85, 8), zinc, x, 6.3, FZ + 0.12));
+  });
+
+  // tabliczka adresowa przy wejściu
+  {
+    const c = document.createElement('canvas');
+    c.width = 256; c.height = 160;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#1d3a55';
+    ctx.fillRect(0, 0, 256, 160);
+    ctx.strokeStyle = '#f0ead8';
+    ctx.lineWidth = 6;
+    ctx.strokeRect(8, 8, 240, 144);
+    ctx.fillStyle = '#f0ead8';
+    ctx.textAlign = 'center';
+    ctx.font = '800 64px "Bricolage Grotesque Variable", sans-serif';
+    ctx.fillText('8', 128, 78);
+    ctx.font = '700 28px "Bricolage Grotesque Variable", sans-serif';
+    ctx.fillText('SŁODOWA', 128, 124);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    groups.parter.add(mesh(new THREE.PlaneGeometry(0.5, 0.32), new THREE.MeshStandardMaterial({ map: t, roughness: 0.5 }), 8.85, 2.95, FZ + 0.04, { cast: false }));
+  }
+
+  // wycieraczka przed wejściem + kosz na śmieci
+  groups.always.add(mesh(new THREE.BoxGeometry(2.2, 0.04, 0.85), new THREE.MeshStandardMaterial({ color: 0x2c2b26, roughness: 1 }), 7, 0.12, FZ + 1.95, { cast: false }));
+  {
+    const bin = new THREE.Group();
+    bin.add(mesh(new THREE.CylinderGeometry(0.24, 0.21, 0.62, 12), doorGreen, 0, 0.43, 0));
+    bin.add(mesh(new THREE.TorusGeometry(0.235, 0.018, 8, 20), steelDark, 0, 0.74, 0, { rx: Math.PI / 2 }));
+    bin.add(mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.5, 6), steelDark, 0, 0.25, 0));
+    bin.position.set(10.3, 0.1, 7.6);
+    groups.always.add(bin);
+  }
+
   // neon „OTWARTE" w oknie
   {
     const t = neonTextTexture('OTWARTE');
@@ -442,17 +489,27 @@ export function buildBar(scene) {
     const patio = new THREE.Group();
     patio.add(mesh(new THREE.BoxGeometry(13, 0.26, 12), deck, 0, 0.13, 0));
     const planterBrick = new THREE.MeshStandardMaterial({ map: brickTexture({ repeat: [10, 0.55], tone: 3 }), roughness: 0.95 });
-    patio.add(mesh(new THREE.BoxGeometry(13.2, 0.62, 0.45), planterBrick, 0, 0.31, 6.1));
+    // murki z przerwą na wejście od chodnika
+    patio.add(mesh(new THREE.BoxGeometry(5.3, 0.62, 0.45), planterBrick, -3.95, 0.31, 6.1));
+    patio.add(mesh(new THREE.BoxGeometry(6.3, 0.62, 0.45), planterBrick, 3.45, 0.31, 6.1));
     patio.add(mesh(new THREE.BoxGeometry(0.45, 0.62, 12.4), planterBrick, 6.6, 0.31, 0));
-    patio.add(mesh(new THREE.BoxGeometry(13.2, 0.08, 0.5), stone, 0, 0.64, 6.1));
+    patio.add(mesh(new THREE.BoxGeometry(5.3, 0.08, 0.5), stone, -3.95, 0.64, 6.1));
+    patio.add(mesh(new THREE.BoxGeometry(6.3, 0.08, 0.5), stone, 3.45, 0.64, 6.1));
     patio.add(mesh(new THREE.BoxGeometry(0.5, 0.08, 12.4), stone, 6.6, 0.64, 0));
+    // stopień wejściowy
+    patio.add(mesh(new THREE.BoxGeometry(1.5, 0.13, 0.7), stone, -0.5, 0.065, 6.4));
     {
       const bush = new THREE.IcosahedronGeometry(0.34, 1);
-      const inst = new THREE.InstancedMesh(bush, bushMat, 26);
+      const inst = new THREE.InstancedMesh(bush, bushMat, 23);
       const M = new THREE.Matrix4();
       let i = 0;
-      for (let k = 0; k < 14; k++) { M.makeTranslation(-6 + k * 0.92, 0.78, 6.1); inst.setMatrixAt(i++, M); }
+      for (let k = 0; k < 14; k++) {
+        if (k >= 5 && k <= 7) continue; // przerwa na wejście
+        M.makeTranslation(-6 + k * 0.92, 0.78, 6.1);
+        inst.setMatrixAt(i++, M);
+      }
       for (let k = 0; k < 12; k++) { M.makeTranslation(6.6, 0.78, -5.4 + k * 0.98); inst.setMatrixAt(i++, M); }
+      inst.count = i;
       inst.castShadow = true;
       patio.add(inst);
     }

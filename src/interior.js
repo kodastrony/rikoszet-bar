@@ -56,6 +56,50 @@ function dartboardTexture() {
   return t;
 }
 
+function textPanelTexture({ w = 256, h = 256, bg = '#10231b', lines = [], pad = 0 }) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, w, h);
+  ctx.textAlign = 'center';
+  for (const [text, y, size, color, weight = 700, ls = 0] of lines) {
+    ctx.fillStyle = color;
+    ctx.font = `${weight} ${size}px "Bricolage Grotesque Variable", sans-serif`;
+    if (ls) ctx.letterSpacing = `${ls}px`;
+    ctx.fillText(text, w / 2 + pad, y);
+    ctx.letterSpacing = '0px';
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+function clockTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#f2ecdc';
+  ctx.beginPath(); ctx.arc(64, 64, 60, 0, 7); ctx.fill();
+  ctx.strokeStyle = '#23282b'; ctx.lineWidth = 5;
+  ctx.beginPath(); ctx.arc(64, 64, 58, 0, 7); ctx.stroke();
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    ctx.lineWidth = i % 3 ? 2 : 4;
+    ctx.beginPath();
+    ctx.moveTo(64 + Math.cos(a) * 48, 64 + Math.sin(a) * 48);
+    ctx.lineTo(64 + Math.cos(a) * 54, 64 + Math.sin(a) * 54);
+    ctx.stroke();
+  }
+  ctx.lineWidth = 4.5;
+  ctx.beginPath(); ctx.moveTo(64, 64); ctx.lineTo(64 + 26, 64 - 14); ctx.stroke();
+  ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(64, 64); ctx.lineTo(64 - 8, 64 - 38); ctx.stroke();
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
 function karaokeTexture() {
   const c = document.createElement('canvas');
   c.width = 256; c.height = 144;
@@ -98,6 +142,19 @@ export function buildInteriors(scene, { night, mats, nightT = 0 }) {
   const bulb = mats.bulbMat;
 
   const X0 = -W / 2 + T, X1 = W / 2 - T, Z0 = -D / 2 + T, Z1 = D / 2 - T;
+
+  // współdzielona geometria hokera (bar + hala)
+  const stoolGeoShared = merged([
+    [cyl(0.21, 0.21, 0.06, 12), 0, 0.78, 0],
+    [cyl(0.03, 0.03, 0.75, 8), 0, 0.4, 0],
+    [cyl(0.16, 0.18, 0.04, 12), 0, 0.02, 0],
+  ]);
+
+  // roślina w donicy (używana w kilku salach)
+  const plant = (x, z, grp = parterInt, y = 0.12) => {
+    grp.add(m(cyl(0.22, 0.18, 0.32, 10), new THREE.MeshStandardMaterial({ color: 0x3a3f3c, roughness: 0.8 }), x, y + 0.16, z));
+    grp.add(m(new THREE.IcosahedronGeometry(0.34, 1), new THREE.MeshStandardMaterial({ color: 0x4c7345, roughness: 0.95 }), x, y + 0.62, z));
+  };
 
   // ── liner-y (ściany + sufit od środka); wcięte 6 cm, żeby nie
   //    walczyły o głębię z cegłą. Piętro celowo z gołą cegłą (loft).
@@ -150,23 +207,49 @@ export function buildInteriors(scene, { night, mats, nightT = 0 }) {
       inst.castShadow = false;
       back.add(inst);
     }
-    // mały neon nad backbarem
+    // mały neon nad backbarem + tablica menu
     const nt = signTexture('RIKOSZET');
     const nm = new THREE.MeshStandardMaterial({
       map: nt, transparent: true, emissiveMap: nt, emissive: 0xff6a4d, emissiveIntensity: 0.1, roughness: 0.6,
     });
-    back.add(m(new THREE.PlaneGeometry(3.4, 0.8), nm, -3.6, 3.3, -5.12, { cast: false, recv: false }));
+    back.add(m(new THREE.PlaneGeometry(3.0, 0.72), nm, -1.4, 3.25, -5.1, { cast: false, recv: false }));
     night.neons.push({ mat: nm, emissive: 1.8 });
+
+    const menuTex = textPanelTexture({
+      w: 512, h: 256, bg: '#1d211c',
+      lines: [
+        ['— MENU —', 52, 38, '#f2e9d6', 800, 4],
+        ['piwo z kranu  14–18', 110, 26, '#e8e0cc', 600],
+        ['koktajle  26–32', 154, 26, '#e8e0cc', 600],
+        ['smashburger + frytki  34', 198, 26, '#e8e0cc', 600],
+        ['happy hours pn–czw 16–18  ·  −20%', 236, 19, '#e3a93c', 700],
+      ],
+    });
+    back.add(m(box(2.3, 1.15, 0.04), new THREE.MeshStandardMaterial({ map: menuTex, roughness: 0.9 }), -5.6, 3.1, -5.08, { cast: false }));
     parterInt.add(back);
+
+    // wiszący reling ze szklankami nad kontuarem
+    {
+      const rack = new THREE.Group();
+      rack.add(m(box(5.6, 0.05, 0.46), oak, 0, 0, 0));
+      [[-2.5, 0], [2.5, 0]].forEach(([rx]) => rack.add(m(cyl(0.015, 0.015, 0.9, 6), steel, rx, 0.47, 0, { cast: false })));
+      const glassGeo = cyl(0.05, 0.04, 0.16, 8);
+      const glassMatI = new THREE.MeshStandardMaterial({ color: 0xdfe9ea, roughness: 0.1, transparent: true, opacity: 0.45 });
+      const gInst = new THREE.InstancedMesh(glassGeo, glassMatI, 14);
+      const GM = new THREE.Matrix4();
+      for (let i = 0; i < 14; i++) {
+        GM.makeTranslation(-2.45 + (i % 7) * 0.82, -0.13, i < 7 ? -0.13 : 0.13);
+        gInst.setMatrixAt(i, GM);
+      }
+      gInst.castShadow = false;
+      rack.add(gInst);
+      rack.position.set(-3.5, 2.62, -2.2);
+      parterInt.add(rack);
+    }
 
     // hokery przy barze (instancje: siedzisko + noga + podstawa)
     {
-      const stoolGeo = merged([
-        [cyl(0.21, 0.21, 0.06, 12), 0, 0.78, 0],
-        [cyl(0.03, 0.03, 0.75, 8), 0, 0.4, 0],
-        [cyl(0.16, 0.18, 0.04, 12), 0, 0.02, 0],
-      ]);
-      const inst = new THREE.InstancedMesh(stoolGeo, leatherWarm, 8);
+      const inst = new THREE.InstancedMesh(stoolGeoShared, leatherWarm, 8);
       const M = new THREE.Matrix4();
       for (let i = 0; i < 8; i++) {
         M.makeTranslation(-7.2 + i * 1.06, 0.12, -1.45);
@@ -183,8 +266,8 @@ export function buildInteriors(scene, { night, mats, nightT = 0 }) {
       parterInt.add(m(new THREE.SphereGeometry(0.06, 8, 6), bulb, x, H1 - 1.68, -2.2, { cast: false }));
     });
 
-    // dywan + stoliki lounge przy oknach
-    parterInt.add(m(box(7.6, 0.025, 3.4), rugMat, -4.6, 0.13, 2.6, { cast: false }));
+    // dywan + stoliki lounge przy oknach (krzesła równo, frontem do stołu)
+    parterInt.add(m(box(7.8, 0.025, 3.5), rugMat, -4.5, 0.13, 2.55, { cast: false }));
     const chairGeo = merged([
       [box(0.46, 0.06, 0.44), 0, 0.46, 0],
       [box(0.46, 0.52, 0.06), 0, 0.74, -0.21],
@@ -193,25 +276,84 @@ export function buildInteriors(scene, { night, mats, nightT = 0 }) {
       [box(0.05, 0.46, 0.05), -0.18, 0.23, 0.18],
       [box(0.05, 0.46, 0.05), 0.18, 0.23, 0.18],
     ]);
-    const chairInst = new THREE.InstancedMesh(chairGeo, darkWood, 14);
+    const chairInst = new THREE.InstancedMesh(chairGeo, darkWood, 9);
     let ci = 0;
     const CM = new THREE.Matrix4();
-    const addChair = (x, z, ry) => {
+    // krzesło stoi na okręgu wokół stołu i patrzy w jego środek
+    const chairAt = (tx, tz, angleDeg) => {
+      const a = (angleDeg * Math.PI) / 180;
+      const x = tx + Math.sin(a) * 0.82;
+      const z = tz + Math.cos(a) * 0.82;
+      const ry = Math.atan2(tx - x, tz - z);
       CM.makeRotationY(ry).setPosition(x, 0.12, z);
       chairInst.setMatrixAt(ci++, CM);
     };
-    [[-6.6, 2.6], [-4.6, 3.1], [-2.6, 2.4]].forEach(([x, z], i) => {
+    [[-6.8, 2.6], [-4.5, 2.9], [-2.2, 2.6]].forEach(([x, z], i) => {
       parterInt.add(m(cyl(0.42, 0.42, 0.05, 14), oak, x, 0.86, z));
       parterInt.add(m(cyl(0.05, 0.07, 0.74, 8), black, x, 0.49, z));
-      addChair(x - 0.7, z + 0.1, Math.PI / 2 + i);
-      addChair(x + 0.7, z - 0.1, -Math.PI / 2 + i * 0.5);
-      addChair(x + 0.1, z + 0.7, Math.PI + i);
+      const base = i === 1 ? 180 : 0; // środkowy stolik krzesłami od okna
+      chairAt(x, z, base + 20);
+      chairAt(x, z, base + 140);
+      chairAt(x, z, base + 260);
     });
-    addChair(-1.2, 4.0, 0.4);
-    addChair(0.2, 2.6, -0.9);
     chairInst.count = ci;
     chairInst.castShadow = true;
     parterInt.add(chairInst);
+
+    // zegar nad przejściem do hali + plakaty na prawej ścianie
+    {
+      const cm = new THREE.MeshStandardMaterial({ map: clockTexture(), roughness: 0.7 });
+      parterInt.add(m(new THREE.CircleGeometry(0.34, 24), cm, X0 + 0.1, 3.62, 0, { ry: Math.PI / 2, cast: false }));
+
+      const posterA = textPanelTexture({
+        w: 256, h: 352, bg: '#16382c',
+        lines: [
+          ['TURNIEJ', 96, 44, '#f2e9d6', 800],
+          ['8-BALL', 148, 44, '#e3a93c', 800],
+          ['każda niedziela', 218, 22, '#cfd8c8', 600],
+          ['17:00', 268, 36, '#f2e9d6', 800],
+        ],
+      });
+      const posterB = textPanelTexture({
+        w: 256, h: 352, bg: '#1c1f21',
+        lines: [
+          ['KARAOKE', 110, 42, '#ff6a4d', 800],
+          ['NIGHT', 158, 42, '#f2e9d6', 800],
+          ['piątki od', 224, 22, '#cfd8c8', 600],
+          ['21:00', 272, 36, '#e3a93c', 800],
+        ],
+      });
+      [[posterA, -3.0], [posterB, -0.2]].forEach(([tex, z]) => {
+        parterInt.add(m(box(0.06, 1.16, 0.84), darkWood, X1 - 0.1, 2.55, z, { cast: false }));
+        parterInt.add(m(new THREE.PlaneGeometry(0.76, 1.06), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 }), X1 - 0.14, 2.55, z, { ry: -Math.PI / 2, cast: false }));
+      });
+    }
+
+    // drzwi WC i zaplecza na tylnej ścianie + futryna przejścia do hali
+    {
+      const door = (x, label) => {
+        const D = new THREE.Group();
+        D.add(m(box(1.06, 2.16, 0.1), darkWood, 0, 1.08, 0));
+        D.add(m(box(0.9, 2.04, 0.05), green, 0, 1.02, 0.04));
+        D.add(m(new THREE.SphereGeometry(0.035, 8, 6), brass, 0.32, 1.02, 0.09, { cast: false }));
+        const sign = textPanelTexture({ w: 128, h: 64, bg: '#efe6d4', lines: [[label, 42, 30, '#23282b', 800, 2]] });
+        D.add(m(new THREE.PlaneGeometry(0.34, 0.17), new THREE.MeshStandardMaterial({ map: sign, roughness: 0.8 }), 0, 1.78, 0.08, { cast: false }));
+        D.position.set(x, 0.12, Z0 + 0.1);
+        parterInt.add(D);
+      };
+      door(-8.9, 'WC');
+      door(-4.3, 'KUCHNIA');
+
+      // futryna przejścia do hali
+      const jamb = darkWood;
+      parterInt.add(m(box(0.42, 3.32, 0.18), jamb, X0 + 0.06, 1.78, -1.34, { cast: false }));
+      parterInt.add(m(box(0.42, 3.32, 0.18), jamb, X0 + 0.06, 1.78, 1.34, { cast: false }));
+      parterInt.add(m(box(0.42, 0.2, 2.86), jamb, X0 + 0.06, 3.36, 0, { cast: false }));
+    }
+
+    // rośliny w donicach
+    plant(X0 + 0.85, Z1 - 0.75);
+    plant(1.95, Z1 - 0.7);
 
     // loże przy prawej ścianie
     [[-3.9], [-1.4], [1.1]].forEach(([z]) => {
@@ -313,12 +455,33 @@ export function buildInteriors(scene, { night, mats, nightT = 0 }) {
     parterInt.add(m(cyl(0.005, 0.005, 0.7, 4), steel, cx, WING.H - 0.35, 0, { cast: false }));
     parterInt.add(m(new THREE.SphereGeometry(0.38, 14, 12), disco, cx, WING.H - 0.9, 0));
 
-    // parkiet + stoliki koktajlowe
-    parterInt.add(m(box(4.6, 0.02, 4.6), new THREE.MeshStandardMaterial({ color: 0x4f3a26, roughness: 0.6 }), cx + 0.4, 0.14, 0, { cast: false }));
-    [[-13.4, 2.6], [-12.2, 0.2], [-13.6, -2.4], [-15.6, 3.1], [-15.8, -3.0]].forEach(([x, z]) => {
-      parterInt.add(m(cyl(0.32, 0.32, 0.05, 12), oak, x, 1.05, z));
-      parterInt.add(m(cyl(0.04, 0.05, 1.0, 8), black, x, 0.55, z));
-    });
+    // parkiet + stoliki koktajlowe w łuku przed sceną (hokery frontem do sceny)
+    parterInt.add(m(box(4.6, 0.02, 4.6), new THREE.MeshStandardMaterial({ color: 0x4f3a26, roughness: 0.6 }), cx + 0.6, 0.14, 0, { cast: false }));
+    {
+      const stageC = { x: -19.6, z: 0 };
+      const hallStools = new THREE.InstancedMesh(stoolGeoShared, leatherWarm, 10);
+      const HM = new THREE.Matrix4();
+      let hi = 0;
+      [-36, -18, 0, 18, 36].forEach((deg) => {
+        const a = (deg * Math.PI) / 180;
+        const tx = stageC.x + Math.cos(a) * 7.0;
+        const tz = stageC.z + Math.sin(a) * 7.0;
+        parterInt.add(m(cyl(0.32, 0.32, 0.05, 12), oak, tx, 1.05, tz));
+        parterInt.add(m(cyl(0.04, 0.05, 1.0, 8), black, tx, 0.55, tz));
+        // dwa hokery za stolikiem, "patrzą" na scenę
+        [-0.42, 0.42].forEach((side) => {
+          const sx = tx + Math.cos(a) * 0.55 - Math.sin(a) * side;
+          const sz = tz + Math.sin(a) * 0.55 + Math.cos(a) * side;
+          HM.makeTranslation(sx, 0.12, sz);
+          hallStools.setMatrixAt(hi++, HM);
+        });
+      });
+      hallStools.count = hi;
+      hallStools.castShadow = true;
+      parterInt.add(hallStools);
+    }
+    plant(hallX1 - 0.85, -3.55);
+    plant(hallX1 - 0.85, 3.55);
 
     // ekran karaoke na tylnej ścianie
     const km = new THREE.MeshStandardMaterial({
@@ -378,10 +541,24 @@ export function buildInteriors(scene, { night, mats, nightT = 0 }) {
       pietroInt.add(m(box(0.16, 0.05, 0.8), oak, X0 + 0.34, upY + 0.9, -3.75, { ry: 0, cast: false }));
     }
 
-    // ławki między oknami
+    // ławki między oknami + kredowa tablica wyników
     [[-5.8], [2.2]].forEach(([x]) => {
       pietroInt.add(m(box(1.7, 0.42, 0.5), leather, x, upY + 0.33, Z1 - 0.45));
     });
+    {
+      const score = textPanelTexture({
+        w: 384, h: 256, bg: '#23291f',
+        lines: [
+          ['WYNIKI LIGI', 54, 32, '#f0ebdc', 800, 2],
+          ['Kuba — 7 : 5 — Olek', 120, 26, '#e8e0cc', 600],
+          ['Magda — 9 : 3 — Piotrek', 164, 26, '#e8e0cc', 600],
+          ['zapisy przy barze ↓', 222, 20, '#e3a93c', 700],
+        ],
+      });
+      pietroInt.add(m(box(0.05, 1.0, 1.5), darkWood, X1 - 0.1, upY + 2.1, 2.4, { cast: false }));
+      pietroInt.add(m(new THREE.PlaneGeometry(1.38, 0.88), new THREE.MeshStandardMaterial({ map: score, roughness: 0.9 }), X1 - 0.14, upY + 2.1, 2.4, { ry: -Math.PI / 2, cast: false }));
+    }
+    plant(X0 + 0.8, Z1 - 0.7, pietroInt, upY);
 
     // balustrada wokół klatki schodowej
     const railMat = steel;

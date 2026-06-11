@@ -17,6 +17,8 @@ const ICO = {
   pin: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 21s7-6.1 7-11a7 7 0 1 0-14 0c0 4.9 7 11 7 11Z"/><circle cx="12" cy="10" r="2.6"/></svg>`,
   mail: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="m4.5 7 7.5 6 7.5-6"/></svg>`,
   burger: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>`,
+  chevL: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg>`,
+  chevR: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9.5 5.5 6.5 6.5-6.5 6.5"/></svg>`,
 };
 
 // ── toast ────────────────────────────────────────────────────
@@ -66,12 +68,23 @@ export function openModal({ title, body, wide = false, className = '' }) {
 }
 
 // ── panel atrakcji (drawer) ─────────────────────────────────
+let currentAttractionId = null;
+
+export function navAttraction(dir) {
+  const idx = ATTRACTIONS.findIndex((x) => x.id === currentAttractionId);
+  if (idx === -1) return;
+  const next = ATTRACTIONS[(idx + dir + ATTRACTIONS.length) % ATTRACTIONS.length];
+  openAttraction(next.id);
+}
+
 export function openAttraction(id) {
   const a = ATTRACTIONS.find((x) => x.id === id);
   if (!a) return;
   booking.close();
   closeModal();
+  currentAttractionId = id;
 
+  const idx = ATTRACTIONS.indexOf(a);
   const facts = a.facts.map(([k, v]) => `<div class="fact"><dt>${k}</dt><dd>${v}</dd></div>`).join('');
   const timeline = a.timeline
     ? `<div class="timeline">${a.timeline.map(([y, t]) => `<div class="tl-row"><span class="tl-year">${y}</span><span class="tl-text">${t}</span></div>`).join('')}</div>`
@@ -81,8 +94,13 @@ export function openAttraction(id) {
     : '';
 
   drawerEl.innerHTML = `
+    <div class="drawer-nav">
+      <button class="icon-btn drawer-arrow" data-nav-dir="-1" aria-label="Poprzednia atrakcja">${ICO.chevL}</button>
+      <button class="icon-btn drawer-arrow" data-nav-dir="1" aria-label="Następna atrakcja">${ICO.chevR}</button>
+      <span class="drawer-count">${idx + 1} / ${ATTRACTIONS.length}</span>
+    </div>
     <button class="icon-btn drawer-close" aria-label="Zamknij panel">${ICO.close}</button>
-    <div class="drawer-scroll">
+    <div class="drawer-scroll swap">
       <div class="drawer-art">${art(a.art)}</div>
       <div class="drawer-content">
         <p class="kicker">${a.kicker}</p>
@@ -98,6 +116,8 @@ export function openAttraction(id) {
     </div>`;
 
   $('.drawer-close', drawerEl).addEventListener('click', closeAttraction);
+  drawerEl.querySelectorAll('[data-nav-dir]').forEach((b) =>
+    b.addEventListener('click', (e) => { e.stopPropagation(); navAttraction(+b.dataset.navDir); }));
   drawerEl.querySelectorAll('[data-cta]').forEach((b) =>
     b.addEventListener('click', () => {
       const t = b.dataset.cta;
@@ -115,6 +135,7 @@ export function openAttraction(id) {
 }
 
 export function closeAttraction() {
+  currentAttractionId = null;
   document.body.classList.remove('drawer-open');
   drawerEl.classList.remove('open');
   deps.setLabelActive(null);
@@ -287,7 +308,9 @@ export function mountUI(d) {
       </button>
     </div>
 
-    <div class="hint" id="hint">Obracaj przeciągając · przybliżaj kółkiem · klikaj znaczniki <b>+</b></div>
+    <div class="hint" id="hint">${matchMedia('(pointer: coarse)').matches
+      ? 'Obracaj palcem · szczypnij, aby przybliżyć · stukaj znaczniki <b>+</b>'
+      : 'Obracaj przeciągając · przybliżaj kółkiem · klikaj znaczniki <b>+</b>'}</div>
 
     <footer class="credit">
       <span>© 2026 ${BRAND.name}</span>
@@ -342,6 +365,12 @@ export function mountUI(d) {
       if (booking.isOpen()) booking.close();
       else if (openModalEl) closeModal();
       else if (drawerEl.classList.contains('open')) closeAttraction();
+    }
+    // strzałki przełączają atrakcje, gdy otwarty jest tylko panel
+    if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') &&
+        drawerEl.classList.contains('open') && !openModalEl && !booking.isOpen()) {
+      e.preventDefault();
+      navAttraction(e.key === 'ArrowRight' ? 1 : -1);
     }
   });
 
