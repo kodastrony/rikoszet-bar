@@ -16,25 +16,6 @@ export const BRAND = {
   ],
 };
 
-// ── Historia do scrollowanego intra (krótko i konkretnie) ────
-export const STORY = [
-  {
-    year: '1926',
-    title: 'Rozlewnia Browaru Miejskiego',
-    text: 'Cegła, stal i słód. Przez pół wieku stąd wyjeżdżały skrzynki piwa na całe miasto.',
-  },
-  {
-    year: '2021',
-    title: 'Dwa lata renowacji',
-    text: 'Odsłaniamy cegłę spod farby, ratujemy stalowe okna i strop. Budynek dostaje drugie życie.',
-  },
-  {
-    year: '2024',
-    title: 'Otwieramy RIKOSZET',
-    text: 'Bilard, rzutki, scena i bar pod jednym dachem. Pierwsza bila pada o 18:07.',
-  },
-];
-
 // Godziny otwarcia: [otwarcie, zamknięcie] w minutach od północy.
 // Zamknięcie > 1440 oznacza, że bar gra do rana następnego dnia.
 // Indeks 0 = niedziela (jak Date.getDay()).
@@ -251,15 +232,13 @@ export const ATTRACTIONS = [
     },
     art: 'historia',
     desc: [
-      'Budynek przy Słodowej 8 powstał w 1926 roku jako rozlewnia Browaru Miejskiego. Cegła, stalowe okna i żeliwne słupy przetrwały do dziś — my tylko odkurzyliśmy je z osiemdziesięciu lat farby.',
-      'Podczas renowacji w piwnicy znaleźliśmy skrzynię porcelanowych kapsli. Kilka z nich oprawiliśmy — wiszą nad barem, resztę wbudowaliśmy w blat kontuaru.',
+      'Budynek przy Słodowej 8 powstał w 1926 roku jako rozlewnia Browaru Miejskiego. Cegła, stalowe okna i żeliwne słupy przetrwały do dziś — my tylko odkurzyliśmy je z lat farby i przywróciliśmy do życia.',
     ],
-    timeline: STORY.map((s) => [s.year, `${s.title} — ${s.text}`]),
     facts: [
       ['Rocznik', '1926'],
-      ['Architekt', 'E. Lange (przebud. 2021)'],
-      ['Powierzchnia', '1240 m²'],
-      ['Status', 'ewidencja zabytków'],
+      ['Dawniej', 'rozlewnia browaru'],
+      ['Materiał', 'cegła · stal · żeliwo'],
+      ['Status', 'budynek zabytkowy'],
     ],
     cta: { type: 'contact', label: 'Jak do nas trafić' },
   },

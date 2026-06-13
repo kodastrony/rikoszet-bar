@@ -298,19 +298,19 @@ export function mountUI(d) {
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 11.5 12 5l8 6.5"/><path d="M6.5 10.5V19h11v-8.5"/></svg>
         Budynek
       </button>
-      <button data-mode="pietro" class="fs-btn">
-        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="5" y="4" width="14" height="7.5" rx="1.5" stroke-dasharray="3 2.4"/><rect x="5" y="13" width="14" height="7" rx="1.5"/></svg>
-        Piętro
-      </button>
       <button data-mode="parter" class="fs-btn">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="5" y="13" width="14" height="7" rx="1.5"/><path d="M5 9h14" stroke-dasharray="3 2.4"/></svg>
         Parter
+      </button>
+      <button data-mode="pietro" class="fs-btn">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="5" y="4" width="14" height="7.5" rx="1.5" stroke-dasharray="3 2.4"/><rect x="5" y="13" width="14" height="7" rx="1.5"/></svg>
+        Piętro
       </button>
     </div>
 
     <div class="hint" id="hint">${matchMedia('(pointer: coarse)').matches
       ? 'Obracaj palcem · szczypnij, aby przybliżyć · stukaj znaczniki <b>+</b>'
-      : 'Obracaj przeciągając · przybliżaj kółkiem · klikaj znaczniki <b>+</b>'}</div>
+      : 'Przeciągnij, by obrócić · kółko przybliża · klikaj <b>+</b> · klawisze <b>1·2·3</b>'}</div>
 
     <footer class="credit">
       <span>© 2026 ${BRAND.name}</span>
@@ -365,13 +365,28 @@ export function mountUI(d) {
       if (booking.isOpen()) booking.close();
       else if (openModalEl) closeModal();
       else if (drawerEl.classList.contains('open')) closeAttraction();
+      return;
     }
+    // nie przejmujemy klawiszy podczas pisania w formularzu ani ze skrótami systemowymi
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.target.matches?.('input, textarea, select')) return;
+
     // strzałki przełączają atrakcje, gdy otwarty jest tylko panel
     if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') &&
         drawerEl.classList.contains('open') && !openModalEl && !booking.isOpen()) {
       e.preventDefault();
       navAttraction(e.key === 'ArrowRight' ? 1 : -1);
+      return;
     }
+
+    // skróty kamery/trybów działają tylko bez otwartych modali (reużywają istniejących przycisków)
+    if (openModalEl || booking.isOpen()) return;
+    const click = (sel) => document.querySelector(sel)?.click();
+    if (e.key === '1') click('.fs-btn[data-mode="full"]');
+    else if (e.key === '2') click('.fs-btn[data-mode="parter"]');
+    else if (e.key === '3') click('.fs-btn[data-mode="pietro"]');
+    else if (e.key === 'r' || e.key === 'R') click('#reset-btn');
+    else if (e.key === 'n' || e.key === 'N') click('#night-btn');
   });
 
   refreshStatus();

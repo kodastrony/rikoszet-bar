@@ -18,7 +18,7 @@ import { buildInteriors } from './interior.js';
 import { buildLabels } from './labels.js';
 import { createNight } from './night.js';
 import { createModes } from './modes.js';
-import { createStory } from './story.js';
+import { createIntro } from './intro.js';
 import { mountUI, openAttraction, syncModeUI } from './ui.js';
 
 const appEl = document.getElementById('app');
@@ -26,10 +26,17 @@ const labelEl = document.getElementById('labels');
 
 const vw = () => Math.max(1, innerWidth || document.documentElement.clientWidth);
 const vh = () => Math.max(1, innerHeight || document.documentElement.clientHeight);
+// rAF z fallbackiem na setTimeout — init nie zawiesza się, gdy karta jest w tle
+const nextFrame = () => new Promise((r) => {
+  let done = false;
+  const fin = () => { if (!done) { done = true; r(); } };
+  requestAnimationFrame(fin);
+  setTimeout(fin, 48);
+});
 
 async function init() {
   try {
-    await Promise.race([document.fonts.ready, new Promise((r) => setTimeout(r, 2200))]);
+    await Promise.race([document.fonts.ready, new Promise((r) => setTimeout(r, 1500))]);
   } catch { /* lecimy dalej */ }
 
   // ── renderer + tiery jakości ───────────────────────────────
@@ -49,6 +56,7 @@ async function init() {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.1;
+  renderer.domElement.style.touchAction = 'none'; // gesty trafiają do OrbitControls, nie do przeglądarki
   appEl.appendChild(renderer.domElement);
 
   const labelRenderer = new CSS2DRenderer({ element: labelEl });
@@ -60,18 +68,24 @@ async function init() {
   scene.fog = new THREE.Fog(0xf2efe7, 110, 290);
 
   const camera = new THREE.PerspectiveCamera(38, vw() / vh(), 0.5, 900);
-  camera.position.set(14, 175, 8);
+  camera.position.set(10, 122, 22);
 
+  // ── sterowanie: wygodne i płynne (desktop + dotyk) ─────────
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.target.set(0, 0, 0);
   controls.enableDamping = true;
-  controls.dampingFactor = 0.06;
+  controls.dampingFactor = 0.08;        // gładki, krótki wybieg po puszczeniu
+  controls.rotateSpeed = 0.82;          // spokojniejszy obrót, łatwiej trafić
+  controls.zoomSpeed = 0.8;             // kółko mniej „skacze"
+  controls.zoomToCursor = true;         // kółko przybliża tam, gdzie kursor — naturalniej
   controls.minDistance = 9;
-  controls.maxDistance = 150;
+  controls.maxDistance = 112;           // węższy zakres = równomierny, przewidywalny zoom
   controls.maxPolarAngle = 1.48;
   controls.minPolarAngle = 0.12;
-  controls.enablePan = false;
-  controls.enabled = false; // do końca intra
+  controls.enablePan = false;           // budynek zawsze w kadrze, nie da się „zgubić"
+  // jeden palec obraca, dwa palce przybliżają (pan wyłączony → bez zgubienia obiektu)
+  controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
+  controls.enabled = false;             // do końca intra
 
   // ── światła ────────────────────────────────────────────────
   const hemi = new THREE.HemisphereLight(0xfff4e0, 0xe2dccb, 0.68);
@@ -94,9 +108,27 @@ async function init() {
   fill.position.set(-40, 30, -30);
   scene.add(fill);
 
-  // ── świat ──────────────────────────────────────────────────
+  // ── intro startuje wcześnie: trzyma splash i progres ───────
+  const intro = createIntro({
+    camera, controls, scene,
+    onDone: () => {
+      controls.enabled = true;
+      controls.autoRotate = true;
+      controls.autoRotateSpeed = -0.3;
+    },
+  });
+
+  // ── świat (budowany etapami, by splash pozostał responsywny) ─
+  intro.setProgress(0.14, 'Budujemy okolicę…');
+  await nextFrame();
   const { lampHeads } = buildCity(scene);
+
+  intro.setProgress(0.46, 'Stawiamy budynek…');
+  await nextFrame();
   const bar = buildBar(scene);
+
+  intro.setProgress(0.68, 'Rozwieszamy światła…');
+  await nextFrame();
   const labels = buildLabels(scene, (id) => openAttraction(id));
 
   const modes = createModes({
@@ -115,6 +147,7 @@ async function init() {
     samples: lowPower || isMobile ? 0 : 4,
   });
   const composer = new EffectComposer(renderer, rt);
+  composer.setPixelRatio(renderer.getPixelRatio()); // bufory w rozdzielczości efektywnej (DPR) od 1. klatki — noc nie rozmyta
   composer.addPass(new RenderPass(scene, camera));
   const bloomPass = new UnrealBloomPass(new THREE.Vector2(vw(), vh()), 0.0, 0.5, 0.82);
   composer.addPass(bloomPass);
@@ -122,21 +155,20 @@ async function init() {
 
   const night = createNight({ scene, hemi, sun, barNight: bar.night, lampHeads, bloomPass });
 
-  // ── wnętrza budujemy chwilę po pierwszej klatce ────────────
-  setTimeout(() => {
-    const ints = buildInteriors(scene, { night: bar.night, mats: bar.mats, nightT: night.t });
-    modes.attachInteriors(ints);
-    night.refresh();
-  }, 150);
-
   // ── ruch kamery ────────────────────────────────────────────
-  // przesunięcie kadru, gdy otwarty jest panel (obiekt ląduje w lewej części)
+  // przesunięcie kadru, gdy otwarty jest panel (obiekt ląduje obok/nad panelem)
   let panelOffset = false;
   function applyViewOffset() {
     const W = vw(), H = vh();
     if (panelOffset) {
-      if (W > 980) camera.setViewOffset(W, H, Math.min(225, W * 0.16), 0, W, H);
-      else camera.setViewOffset(W, H, 0, Math.round(H * 0.15), W, H);
+      if (W > 980) {
+        // desktop: panel po prawej → obiekt w lewej części kadru
+        camera.setViewOffset(W, H, Math.min(235, W * 0.17), 0, W, H);
+      } else {
+        // mobile: panel to dolny arkusz (~46vh) → wynieś obiekt w górną strefę nad panel,
+        // ale nie pod topbar (offset dobrany tak, by środek strefy był ok. 30% wysokości)
+        camera.setViewOffset(W, H, 0, Math.round(H * 0.22), W, H);
+      }
     } else {
       camera.clearViewOffset();
     }
@@ -144,9 +176,11 @@ async function init() {
 
   // powolny filmowy dryf wokół celu (gdy klient czyta panel)
   let driftActive = false;
+  let lastInteract = performance.now();
   const UP = new THREE.Vector3(0, 1, 0);
   const stopDrift = () => { driftActive = false; };
-  controls.addEventListener('start', stopDrift);
+  // interakcja użytkownika wstrzymuje auto-obrót; wraca po chwili bezczynności
+  controls.addEventListener('start', () => { stopDrift(); lastInteract = performance.now(); controls.autoRotate = false; });
 
   let cancelFly = null;
   const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _mid = new THREE.Vector3();
@@ -160,10 +194,10 @@ async function init() {
     const t1 = new THREE.Vector3(...(view.target.toArray ? view.target.toArray() : view.target));
     const dist = p0.distanceTo(p1);
     _mid.lerpVectors(p0, p1, 0.5);
-    _mid.y += Math.min(4.5, Math.max(0.25, dist * 0.075)); // łagodny łuk
+    _mid.y += Math.min(3.0, Math.max(0.2, dist * 0.06)); // łagodny łuk; krótkie skoki niemal liniowe
     const mid = _mid.clone();
     cancelFly = tween({
-      dur: Math.min(2400, dur + dist * 8), // dalsze przeloty trwają odrobinę dłużej
+      dur: Math.min(1600, dur + dist * 5), // żwawsza nawigacja między atrakcjami
       ease: easeInOutCubic,
       update: (e) => {
         _a.lerpVectors(p0, mid, e);
@@ -181,7 +215,7 @@ async function init() {
 
   let modeBeforeFocus = null;
   function focusAttraction(id) {
-    if (!story.finished()) return;
+    if (!intro.finished()) return;
     const a = ATTRACTIONS.find((x) => x.id === id);
     if (!a) return;
     controls.autoRotate = false;
@@ -203,7 +237,7 @@ async function init() {
     flyTo(MODE_VIEWS[back], 1300);
   }
   function setMode(m) {
-    if (!story.finished() || m === modes.mode) return;
+    if (!intro.finished() || m === modes.mode) return;
     modeBeforeFocus = null;
     panelOffset = false;
     applyViewOffset();
@@ -223,17 +257,6 @@ async function init() {
   });
   syncModeUI('full');
 
-  // ── intro ──────────────────────────────────────────────────
-  const story = createStory({
-    camera, controls, scene,
-    onDone: () => {
-      controls.enabled = true;
-      controls.autoRotate = true;
-      controls.autoRotateSpeed = -0.4;
-    },
-  });
-  renderer.domElement.addEventListener('pointerdown', () => { controls.autoRotate = false; }, { once: true });
-
   // ── dynamiczny downgrade przy bardzo wolnych klatkach ─────
   let frameCount = 0;
   let slowFrames = 0;
@@ -248,6 +271,7 @@ async function init() {
     if (slowFrames > 14) {
       lowPower = true;
       renderer.setPixelRatio(0.75);
+      composer.setPixelRatio(0.75); // downgrade obejmuje też łańcuch postprocessingu (bloom nocą)
       renderer.shadowMap.enabled = false;
       sun.castShadow = false;
       console.info('[rikoszet] tryb oszczędny: wyłączam cienie i obniżam rozdzielczość');
@@ -277,7 +301,13 @@ async function init() {
     lastNow = now;
     maybeDowngrade(now);
     updateTweens(now);
-    story.update();
+    intro.update(now);
+    // po ~12 s bezczynności (i gdy nie czytasz panelu) scena znów delikatnie się obraca
+    if (intro.finished() && !controls.autoRotate && !driftActive && !cancelFly &&
+        modeBeforeFocus === null && !document.body.classList.contains('modal-open') &&
+        !document.body.classList.contains('booking-open') && now - lastInteract > 12000) {
+      controls.autoRotate = true;
+    }
     if (driftActive && !cancelFly) {
       // bardzo wolny obrót w lewo wokół celu — klient widzi więcej, czytając
       const off = camera.position.clone().sub(controls.target);
@@ -285,7 +315,9 @@ async function init() {
       camera.position.copy(controls.target).add(off);
     }
     controls.update();
-    if (lowPower && night.t === 0) {
+    // w dzień (brak bloomu) renderujemy wprost — pomijamy kosztowny łańcuch postprocessingu;
+    // composer wchodzi tylko, gdy świeci noc (night.t > 0)
+    if (night.t === 0) {
       renderer.render(scene, camera);
     } else {
       composer.render();
@@ -293,6 +325,20 @@ async function init() {
     labelRenderer.render(scene, camera);
   }
   renderer.setAnimationLoop(tick);
+
+  // jedna złożona klatka zanim ruszy najazd (gładkie odsłonięcie)
+  intro.setProgress(0.92, 'Prawie gotowe…');
+  await nextFrame();
+  await nextFrame();
+  intro.setProgress(1, 'Zapraszamy');
+  intro.begin();
+
+  // ── wnętrza dobudowujemy w tle, już po starcie intra ───────
+  setTimeout(() => {
+    const ints = buildInteriors(scene, { night: bar.night, mats: bar.mats, nightT: night.t });
+    modes.attachInteriors(ints);
+    night.refresh();
+  }, 300);
 
   // DEV: gdy karta jest ukryta, rAF stoi — podtrzymujemy render interwałem
   // (w produkcji oszczędzamy baterię i nic nie renderujemy w tle)
@@ -308,10 +354,7 @@ async function init() {
     };
     document.addEventListener('visibilitychange', syncHiddenLoop);
     syncHiddenLoop();
-  }
-
-  if (import.meta.env.DEV) {
-    window.__rks = { renderer, scene, camera, controls, composer, night, modes, tick, flyTo, story, MODE_VIEWS, openAttraction, setMode };
+    window.__rks = { renderer, scene, camera, controls, composer, night, modes, tick, flyTo, intro, MODE_VIEWS, openAttraction, setMode };
   }
 }
 

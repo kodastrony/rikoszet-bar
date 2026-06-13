@@ -1,29 +1,115 @@
 <!doctype html>
-<html lang="pl" class="intro-scroll">
+<html lang="pl">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>RIKOSZET — Bar & Klub Gier · Wrocław</title>
-  <meta name="description" content="Bilard, rzutki, karaoke i scena w starej rozlewni przy Słodowej 8. Zajrzyj do środka w 3D i zarezerwuj stół, tor albo salkę na urodziny." />
+  <meta name="color-scheme" content="light dark" />
+
+  <title>RIKOSZET — Bar &amp; Klub Gier · Bilard, Rzutki, Karaoke · Wrocław</title>
+  <meta name="description" content="RIKOSZET — bar i klub gier w starej rozlewni przy Słodowej 8 we Wrocławiu. Bilard, rzutki, karaoke i scena pod jednym dachem. Zwiedź lokal w 3D i zarezerwuj stół, tor albo salkę na imprezę." />
+  <meta name="author" content="RIKOSZET" />
   <meta name="theme-color" content="#10231b" />
+  <link rel="canonical" href="https://kodastrony.github.io/rikoszet-bar/" />
+  <meta name="robots" content="index, follow" />
+
   <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-  <meta property="og:title" content="RIKOSZET — Bar & Klub Gier" />
-  <meta property="og:description" content="Bilard, rzutki, karaoke i dobre piwo pod jednym dachem starej rozlewni. Zajrzyj do środka w 3D." />
+  <link rel="apple-touch-icon" href="./icon-192.png" />
+  <link rel="manifest" href="./site.webmanifest" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="RIKOSZET" />
+  <meta property="og:locale" content="pl_PL" />
+  <meta property="og:url" content="https://kodastrony.github.io/rikoszet-bar/" />
+  <meta property="og:title" content="RIKOSZET — Bar & Klub Gier · Wrocław" />
+  <meta property="og:description" content="Bilard, rzutki, karaoke i scena pod jednym dachem starej rozlewni. Zajrzyj do środka w 3D i zarezerwuj stół albo salkę." />
+  <meta property="og:image" content="https://kodastrony.github.io/rikoszet-bar/og-cover.jpg" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="Ceglany budynek baru RIKOSZET z ogródkiem, widok 3D" />
+
+  <!-- Twitter / X -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="RIKOSZET — Bar & Klub Gier · Wrocław" />
+  <meta name="twitter:description" content="Bilard, rzutki, karaoke i scena w starej rozlewni przy Słodowej 8. Zwiedź w 3D i zarezerwuj." />
+  <meta name="twitter:image" content="https://kodastrony.github.io/rikoszet-bar/og-cover.jpg" />
+
+  <!-- Dane strukturalne: lokal gastronomiczny -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BarOrPub",
+    "name": "RIKOSZET — Bar & Klub Gier",
+    "description": "Bar i klub gier w zabytkowej rozlewni: bilard, rzutki, karaoke, scena koncertowa i ogródek.",
+    "url": "https://kodastrony.github.io/rikoszet-bar/",
+    "image": "https://kodastrony.github.io/rikoszet-bar/og-cover.jpg",
+    "telephone": "+48713070808",
+    "email": "rezerwacje@rikoszet.pl",
+    "priceRange": "$$",
+    "currenciesAccepted": "PLN",
+    "servesCuisine": "Bar food",
+    "address": {
+      "@type": "PostalAddress",
+      "streetAddress": "ul. Słodowa 8",
+      "addressLocality": "Wrocław",
+      "postalCode": "50-266",
+      "addressCountry": "PL"
+    },
+    "geo": {
+      "@type": "GeoCoordinates",
+      "latitude": 51.1128,
+      "longitude": 17.0395
+    },
+    "openingHoursSpecification": [
+      { "@type": "OpeningHoursSpecification", "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday"], "opens": "16:00", "closes": "00:00" },
+      { "@type": "OpeningHoursSpecification", "dayOfWeek": "Friday", "opens": "16:00", "closes": "02:00" },
+      { "@type": "OpeningHoursSpecification", "dayOfWeek": "Saturday", "opens": "14:00", "closes": "02:00" },
+      { "@type": "OpeningHoursSpecification", "dayOfWeek": "Sunday", "opens": "14:00", "closes": "22:00" }
+    ],
+    "amenityFeature": [
+      { "@type": "LocationFeatureSpecification", "name": "Bilard", "value": true },
+      { "@type": "LocationFeatureSpecification", "name": "Rzutki", "value": true },
+      { "@type": "LocationFeatureSpecification", "name": "Karaoke", "value": true },
+      { "@type": "LocationFeatureSpecification", "name": "Scena / koncerty", "value": true },
+      { "@type": "LocationFeatureSpecification", "name": "Ogródek letni", "value": true }
+    ]
+  }
+  </script>
+
   <style>
-    /* krytyczny stan startowy: splash widoczny od pierwszej klatki */
+    /* Krytyczny ekran startowy — widoczny od pierwszej klatki, zanim wczyta się JS/3D. */
     html, body { margin: 0; background: #10231b; }
     #splash {
       position: fixed; inset: 0; z-index: 96;
       display: grid; place-items: center;
-      background: radial-gradient(120% 90% at 50% 20%, #1c4434 0%, #10231b 62%, #0b1a14 100%);
-      font-family: system-ui, sans-serif;
-      transition: opacity 0.3s linear;
+      background: radial-gradient(120% 90% at 50% 22%, #1c4434 0%, #10231b 60%, #0a1812 100%);
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      transition: opacity 0.6s ease;
+      pointer-events: auto; /* stuknij/kliknij gdziekolwiek na splashu, aby wejść od razu */
     }
-    #splash .splash-inner { text-align: center; color: #f2e9d6; padding: 24px; }
-    #splash .splash-name { margin: 16px 0 2px; font-size: clamp(52px, 9vw, 96px); font-weight: 800; letter-spacing: 0.05em; line-height: 1; }
-    #splash .splash-tag { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: 0.4em; text-transform: uppercase; color: #e3a93c; }
+    #splash .splash-inner { text-align: center; color: #f2e9d6; padding: 24px; max-width: 480px; }
+    #splash .logo-mark { width: 76px; height: 76px; animation: introBall 1.3s cubic-bezier(.34,1.4,.44,1) both; }
+    #splash .splash-name { margin: 18px 0 3px; font-size: clamp(54px, 9vw, 98px); font-weight: 800; letter-spacing: 0.05em; line-height: 1; }
+    #splash .splash-tag { margin: 0; font-size: 12.5px; font-weight: 700; letter-spacing: 0.42em; text-transform: uppercase; color: #e3a93c; }
     #splash .splash-claim { margin: 22px auto 0; max-width: 420px; font-size: 15.5px; line-height: 1.6; color: #cfd8c8; }
-    #splash .splash-scroll { margin-top: 52px; display: inline-flex; align-items: center; gap: 12px; font-size: 12px; font-weight: 650; letter-spacing: 0.14em; text-transform: uppercase; color: #9fb3a3; }
+    #splash .splash-loader {
+      margin: 40px auto 0; width: 188px; height: 4px; border-radius: 999px;
+      background: rgba(242,233,214,0.16); overflow: hidden;
+    }
+    #splash .splash-loader > i {
+      display: block; height: 100%; width: 8%; border-radius: 999px;
+      background: linear-gradient(90deg, #e3a93c, #f2d28a);
+      transition: width 0.5s cubic-bezier(.3,.9,.24,1);
+    }
+    #splash .splash-status {
+      margin: 14px 0 0; font-size: 11px; font-weight: 600; letter-spacing: 0.16em;
+      text-transform: uppercase; color: #8aa091;
+    }
+    @keyframes introBall { 0% { transform: translateY(-44px) rotate(-130deg); opacity: 0; } 100% { transform: none; opacity: 1; } }
+    @media (prefers-reduced-motion: reduce) {
+      #splash .logo-mark { animation: none; }
+      #splash { transition: none; }
+    }
   </style>
 </head>
 <body class="introing">
@@ -31,22 +117,29 @@
   <div id="labels"></div>
   <div id="ui"></div>
 
-  <div id="scroll-space" aria-hidden="true"></div>
-  <div id="story">
+  <!-- Treść dla wyszukiwarek i czytników (ukryta wizualnie regułą CSS, dostępna dla SR) -->
+  <main id="seo-fallback">
+    <h1>RIKOSZET — Bar &amp; Klub Gier we Wrocławiu</h1>
+    <p>Bilard, rzutki, karaoke i scena koncertowa w zabytkowej rozlewni przy ul. Słodowej 8 (50-266 Wrocław). Pięć stołów bilardowych 9ft, cztery tory steel dart, salka eventowa do 40 osób, loże i ogródek letni. Rezerwacje: rezerwacje@rikoszet.pl, +48 71 307 08 08.</p>
+  </main>
+
+  <div id="story" role="dialog" aria-label="Wprowadzenie">
     <div class="splash" id="splash">
       <div class="splash-inner">
-        <svg viewBox="0 0 40 40" class="logo-mark" width="72" height="72" aria-hidden="true">
+        <svg viewBox="0 0 40 40" class="logo-mark" width="76" height="76" aria-hidden="true">
           <circle cx="20" cy="20" r="18.5" fill="#10231b"/>
           <circle cx="20" cy="20" r="18.5" fill="none" stroke="#e3a93c" stroke-width="2.2"/>
           <circle cx="20" cy="15.4" r="8.6" fill="#f2e9d6"/>
           <text x="20" y="19.8" font-size="12.5" font-weight="800" text-anchor="middle" fill="#10231b" font-family="'Bricolage Grotesque Variable',sans-serif">8</text>
         </svg>
-        <h1 class="splash-name">RIKOSZET</h1>
+        <div class="splash-name">RIKOSZET</div>
         <p class="splash-tag">Bar &amp; Klub Gier</p>
         <p class="splash-claim">Bilard, rzutki i karaoke pod jednym dachem starej rozlewni.</p>
-        <div class="splash-scroll"><span class="ss-mouse"><i></i></span> przewiń, aby poznać historię</div>
+        <div class="splash-loader" aria-hidden="true"><i id="splash-bar"></i></div>
+        <p class="splash-status" id="splash-status">Wczytywanie lokalu…</p>
       </div>
     </div>
+    <button class="story-skip" id="story-skip" hidden>Wejdź od razu →</button>
   </div>
 
   <script type="module" src="/src/main.js"></script>

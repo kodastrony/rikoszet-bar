@@ -12,7 +12,7 @@ const C = {
 };
 
 const wrap = (inner, id) => `
-<svg class="art art-${id}" viewBox="0 0 400 220" xmlns="http://www.w3.org/2000/svg" role="img">
+<svg class="art art-${id}" viewBox="0 0 400 220" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
   <defs>
     <radialGradient id="glow-${id}" cx="50%" cy="30%" r="75%">
       <stop offset="0%" stop-color="${C.bg2}"/><stop offset="100%" stop-color="${C.bg}"/>

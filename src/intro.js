@@ -1,0 +1,116 @@
+// Krótkie kinowe intro: marka na splashu → kamera płynnie wlatuje po łagodnej
+// krzywej z ujęcia z góry na bohaterski kadr baru, mgła się przeciera.
+// Sterowane CZASEM (nie scrollem) — identyczne na PC i mobile, z przyciskiem skip.
+import * as THREE from 'three';
+import { easeInOutCubic } from './tween.js';
+
+const FLY_MS = 3000; // długość najazdu kamery
+
+export function createIntro({ camera, controls, scene, onDone }) {
+  const posCurve = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(10, 122, 22),
+    new THREE.Vector3(50, 64, 62),
+    new THREE.Vector3(30, 25, 54),
+    new THREE.Vector3(17, 12.8, 42),
+  ], false, 'centripetal');
+  const tgtCurve = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(0, 0.5, 0),
+    new THREE.Vector3(0.5, 2.4, 0),
+    new THREE.Vector3(1, 3.2, 0),
+    new THREE.Vector3(1, 3.4, 0),
+  ], false, 'centripetal');
+  const FOG = { near0: 46, far0: 150, near1: 110, far1: 290 };
+
+  const storyEl = document.getElementById('story');
+  const splash = document.getElementById('splash');
+  const bar = document.getElementById('splash-bar');
+  const statusEl = document.getElementById('splash-status');
+  const skipBtn = document.getElementById('story-skip');
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  let begun = false;
+  let finished = false;
+  let startT = 0;
+  let p = 0;
+
+  function applyCamera(t) {
+    camera.position.copy(posCurve.getPoint(t));
+    controls.target.copy(tgtCurve.getPoint(t));
+    if (scene.fog) {
+      scene.fog.near = FOG.near0 + (FOG.near1 - FOG.near0) * t;
+      scene.fog.far = FOG.far0 + (FOG.far1 - FOG.far0) * t;
+    }
+  }
+
+  function finish() {
+    if (finished) return;
+    finished = true;
+    p = 1;
+    applyCamera(1);
+    if (scene.fog) { scene.fog.near = FOG.near1; scene.fog.far = FOG.far1; }
+    document.body.classList.remove('introing');
+    storyEl.classList.add('done');
+    setTimeout(() => storyEl.remove(), 700);
+    onDone?.();
+  }
+
+  // ── splash / loader ────────────────────────────────────────
+  function setProgress(frac, label) {
+    if (bar) bar.style.width = `${Math.round(Math.max(6, Math.min(1, frac) * 100))}%`;
+    if (label && statusEl) statusEl.textContent = label;
+  }
+
+  function revealSkip() {
+    if (!skipBtn) return;
+    skipBtn.hidden = false;
+    requestAnimationFrame(() => skipBtn.classList.add('show'));
+  }
+
+  // ── start najazdu ──────────────────────────────────────────
+  function begin() {
+    if (begun || finished) return;
+    begun = true;
+    if (statusEl) statusEl.textContent = 'Zapraszamy do środka';
+    revealSkip();
+    if (reduced) { finish(); return; }
+    startT = 0; // ustawiane przy pierwszym update
+  }
+
+  function skip() {
+    if (finished) return;
+    // szybkie domknięcie: splash znika natychmiast, kamera ląduje na celu
+    if (splash) splash.style.transition = 'opacity 0.35s ease';
+    finish();
+  }
+
+  // ── pętla (wołana z głównego RAF) ──────────────────────────
+  function update(now) {
+    if (!begun || finished) return;
+    if (!startT) startT = now;
+    const e = easeInOutCubic(Math.min(1, (now - startT) / FLY_MS));
+    p = e;
+    applyCamera(e);
+    // splash gaśnie w pierwszej połowie najazdu, płynnie odsłaniając scenę
+    if (splash) splash.style.opacity = String(Math.max(0, 1 - Math.max(0, (e - 0.08)) / 0.42));
+    if (e >= 1) finish();
+  }
+
+  // ── wejście / reduced-motion ───────────────────────────────
+  applyCamera(0);
+  if (reduced) {
+    // bez animacji: pokaż markę chwilę, potem od razu finalny kadr
+    setProgress(1, 'Gotowe');
+  }
+
+  skipBtn?.addEventListener('click', skip);
+  splash?.addEventListener('pointerdown', (e) => { if (begun) skip(); });
+
+  return {
+    update,
+    setProgress,
+    begin,
+    skip,
+    finished: () => finished,
+    started: () => begun,
+  };
+}
