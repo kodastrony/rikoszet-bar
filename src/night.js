@@ -23,9 +23,11 @@ const NIGHT = {
   interiorTint: new THREE.Color(0x151515),
 };
 
-export function createNight({ scene, hemi, sun, barNight, lampHeads, bloomPass }) {
+export function createNight({ scene, hemi, sun, barNight, lampHeads }) {
   let mode = 'day';
   let t = 0;
+  let bloom = null; // ustawiany przez setBloom po leniwym wczytaniu postprocessingu
+  let cancelTween = null; // anulowanie trwającego przejścia dzień/noc
 
   // gwiazdy
   const starGeo = new THREE.BufferGeometry();
@@ -75,7 +77,7 @@ export function createNight({ scene, hemi, sun, barNight, lampHeads, bloomPass }
     for (const m of lampHeads) m.emissiveIntensity = 2.2 * x;
 
     starMat.opacity = 0.85 * x;
-    if (bloomPass) bloomPass.strength = 0.55 * x;
+    if (bloom) bloom.strength = 0.55 * x;
   }
 
   apply(0);
@@ -83,6 +85,8 @@ export function createNight({ scene, hemi, sun, barNight, lampHeads, bloomPass }
   return {
     get mode() { return mode; },
     get t() { return t; },
+    /** Podpięcie bloomu po leniwym wczytaniu postprocessingu. */
+    setBloom(bp) { bloom = bp; },
     /** Ponowne nałożenie stanu (np. po dobudowaniu wnętrz). */
     refresh() { apply(t); },
     toggle() {
@@ -90,7 +94,12 @@ export function createNight({ scene, hemi, sun, barNight, lampHeads, bloomPass }
       const from = t;
       const to = mode === 'night' ? 1 : 0;
       document.body.classList.toggle('night', mode === 'night');
-      tween({ dur: 1500, update: (e) => apply(from + (to - from) * e) });
+      cancelTween?.(); // ubij poprzednie przejście, by tweeny się nie nakładały
+      cancelTween = tween({
+        dur: 1500,
+        update: (e) => apply(from + (to - from) * e),
+        done: () => { cancelTween = null; },
+      });
       return mode;
     },
   };

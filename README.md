@@ -23,9 +23,15 @@ białe miasto-duch + szczegółowy, w pełni umeblowany bar w starej rozlewni. W
 ## Wydajność i SEO
 
 - Budowa sceny rozłożona na klatki (responsywny ekran ładowania z progresem), miasto mergowane do 2 geometrii, meble instancjonowane, wnętrza dobudowywane po starcie intra.
-- Postprocessing (bloom) liczony tylko nocą — w dzień render bezpośredni, bez kosztu łańcucha efektów.
-- `three` w osobnym chunku (cache), tiery jakości dla mobile/słabych GPU + dynamiczny downgrade cieni.
+- **Postprocessing (bloom) ładowany dynamicznie** — moduły i render-targety bloomu powstają dopiero przy pierwszym włączeniu nocy; w dzień render bezpośredni, bez kosztu łańcucha efektów ani zbędnego parsowania na starcie.
+- `three` w osobnym chunku (cache), tiery jakości dla mobile/słabych GPU + szybki dynamiczny downgrade (rozdzielczość + cienie) przy spadkach FPS.
 - SEO: dane strukturalne JSON-LD `BarOrPub` (godziny, adres, geo), OpenGraph + Twitter z obrazem `og-cover.jpg`, `canonical`, `robots.txt`, `sitemap.xml`, `site.webmanifest` + ikony PWA, pojedynczy semantyczny `h1`, dostępny fallback tekstowy.
+
+## Dostępność (WCAG 2.2 AA)
+
+- Pełna obsługa klawiatury: hotspoty i mapy sal (wybór stołu/toru/loży) jako `role="button"` z Enter/Spacją i etykietami stanu (wolny/zajęty/twój wybór).
+- Modale i kreator rezerwacji: pułapka fokusu, przeniesienie fokusu do dialogu i przywrócenie do wyzwalacza, `inert` na tle (czytnik ekranu i Tab nie wchodzą pod overlay).
+- `aria-pressed`/`aria-expanded`/`aria-live` na przełącznikach, menu i toastach; landmarki (`header`/`nav`/`aside`/`footer`); kontrast tekstu ≥4.5:1 (token `--amber-text` zależny od motywu); widoczny pierścień fokusu; `prefers-reduced-motion`. Walidowane skanem axe-core (0 naruszeń).
 
 ## Uruchomienie
 

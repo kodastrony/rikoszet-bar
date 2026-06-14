@@ -2,9 +2,16 @@
 // Dostępność symulowana deterministycznie + rezerwacje zapisane w localStorage.
 import { RESOURCES, HOURS, fmtTime, STORAGE_KEY } from './data.js';
 import { icon } from './svgart.js';
+import { trapFocus, focusFirst, setBackgroundInert } from './a11y.js';
 
 let root, toastFn;
 let overlay = null;
+let releaseFocus = null;     // pułapka fokusu kreatora
+let lastRenderedStep = -1;   // by przenosić fokus tylko przy ZMIANIE kroku
+
+// escapowanie danych użytkownika wstawianych do innerHTML (ochrona przed wstrzyknięciem HTML)
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 const pad = (n) => String(n).padStart(2, '0');
 const todayStr = (off = 0) => {
@@ -31,9 +38,14 @@ const storedBookings = () => {
   catch { return []; }
 };
 const saveBooking = (b) => {
-  const all = storedBookings();
-  all.push(b);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+  try {
+    const all = storedBookings();
+    all.push(b);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+    return true;
+  } catch {
+    return false; // brak/limit localStorage (tryb prywatny) — demo i tak dokończy rezerwację
+  }
 };
 
 function simTaken(dateStr, resId, unit, hourMin) {
@@ -115,15 +127,21 @@ function priceInfo() {
 }
 
 // ── mapki sal ───────────────────────────────────────────────
-function unitClass(u, frees) {
-  if (st.unit === u) return 'unit sel';
-  return frees.includes(u) ? 'unit free' : 'unit busy';
+function unitState(u, frees) {
+  if (st.unit === u) return 'sel';
+  return frees.includes(u) ? 'free' : 'busy';
+}
+// atrybuty <g> jednostki: klasa stanu + dostępność z klawiatury (rola, tabindex, etykieta)
+function unitAttrs(u, frees, name) {
+  const s = unitState(u, frees);
+  const lbl = s === 'sel' ? 'twój wybór' : s === 'free' ? 'wolny' : 'zajęty';
+  return `class="unit ${s}" data-unit="${u}" role="button" tabindex="${s === 'busy' ? '-1' : '0'}" aria-label="${name} ${u} — ${lbl}"` + (s === 'busy' ? ' aria-disabled="true"' : '');
 }
 
 function mapBilard(frees) {
   const tables = [[120, 96], [245, 96], [370, 96], [182, 222], [307, 222]];
   return `
-  <svg viewBox="0 0 460 310" class="floor-map">
+  <svg viewBox="0 0 460 310" class="floor-map" role="group" aria-label="Plan sali bilardowej — wybierz stół">
     <rect x="8" y="8" width="444" height="294" rx="14" fill="var(--map-floor)" stroke="var(--map-wall)" stroke-width="3"/>
     <g stroke="#7fb89a" stroke-width="5" stroke-linecap="round">
       <line x1="60" y1="8" x2="150" y2="8"/><line x1="190" y1="8" x2="280" y2="8"/><line x1="320" y1="8" x2="410" y2="8"/>
@@ -135,7 +153,7 @@ function mapBilard(frees) {
     <rect x="408" y="210" width="36" height="84" rx="8" fill="#caa05c" opacity=".8"/>
     <text x="426" y="256" class="map-note" text-anchor="middle" transform="rotate(-90 426 256)">barek</text>
     ${tables.map(([x, y], i) => `
-      <g class="${unitClass(i + 1, frees)}" data-unit="${i + 1}" transform="translate(${x},${y})">
+      <g ${unitAttrs(i + 1, frees, 'Stół')} transform="translate(${x},${y})">
         <rect x="-52" y="-30" width="104" height="60" rx="8" class="u-frame"/>
         <rect x="-44" y="-22" width="88" height="44" rx="4" class="u-fill"/>
         ${[[-44, -22], [0, -24], [44, -22], [-44, 22], [0, 24], [44, 22]].map(([px, py]) => `<circle cx="${px}" cy="${py}" r="4.5" fill="#10231b"/>`).join('')}
@@ -146,13 +164,13 @@ function mapBilard(frees) {
 
 function mapRzutki(frees) {
   return `
-  <svg viewBox="0 0 460 310" class="floor-map">
+  <svg viewBox="0 0 460 310" class="floor-map" role="group" aria-label="Plan strefy rzutek — wybierz tor">
     <rect x="8" y="8" width="444" height="294" rx="14" fill="var(--map-floor)" stroke="var(--map-wall)" stroke-width="3"/>
     <text x="230" y="30" class="map-note" text-anchor="middle">ściana z tarczami</text>
     ${[0, 1, 2, 3].map((i) => {
       const x = 64 + i * 110;
       return `
-      <g class="${unitClass(i + 1, frees)}" data-unit="${i + 1}" transform="translate(${x},0)">
+      <g ${unitAttrs(i + 1, frees, 'Tor')} transform="translate(${x},0)">
         <rect x="-42" y="40" width="84" height="240" rx="10" class="u-fill" opacity="0.94"/>
         <circle cy="86" r="27" class="u-board"/>
         ${Array.from({ length: 10 }, (_, k) => `<line x1="${Math.cos(k * 0.628) * 27}" y1="${86 + Math.sin(k * 0.628) * 27}" x2="${Math.cos(k * 0.628) * 8}" y2="${86 + Math.sin(k * 0.628) * 8}" stroke="rgba(255,255,255,.5)" stroke-width="1.4"/>`).join('')}
@@ -167,12 +185,12 @@ function mapRzutki(frees) {
 function mapLoza(frees) {
   const pos = [[96, 92, 'Pod oknem'], [330, 92, 'Przy scenie'], [96, 240, 'Kominkowa'], [330, 240, 'Narożna']];
   return `
-  <svg viewBox="0 0 460 330" class="floor-map">
+  <svg viewBox="0 0 460 330" class="floor-map" role="group" aria-label="Plan sali — wybierz lożę">
     <rect x="8" y="8" width="444" height="314" rx="14" fill="var(--map-floor)" stroke="var(--map-wall)" stroke-width="3"/>
     <rect x="180" y="140" width="100" height="52" rx="10" fill="#caa05c" opacity=".85"/>
     <text x="230" y="170" class="map-note" text-anchor="middle">bar</text>
     ${pos.map(([x, y, name], i) => `
-      <g class="${unitClass(i + 1, frees)}" data-unit="${i + 1}" transform="translate(${x},${y})">
+      <g ${unitAttrs(i + 1, frees, 'Loża')} transform="translate(${x},${y})">
         <path d="M-58 -34 h116 a10 10 0 0 1 10 10 v48 h-18 v-40 h-100 v40 h-18 v-48 a10 10 0 0 1 10 -10z" class="u-fill"/>
         <ellipse cy="14" rx="34" ry="20" class="u-table"/>
         <text y="20" text-anchor="middle" class="u-num">${i + 1}</text>
@@ -191,7 +209,7 @@ function stepResource() {
     <p class="bk-lead">Co chcesz zarezerwować?</p>
     <div class="res-grid">
       ${Object.values(RESOURCES).map((r) => `
-        <button class="res-card ${st.resource === r.id ? 'sel' : ''}" data-res="${r.id}">
+        <button class="res-card ${st.resource === r.id ? 'sel' : ''}" data-res="${r.id}" aria-pressed="${st.resource === r.id}">
           <span class="res-ico">${icon(r.icon)}</span>
           <span class="res-name">${r.label}</span>
           <span class="res-blurb">${r.blurb}</span>
@@ -232,21 +250,21 @@ function stepWhen() {
         <div class="date-line">
           <input type="date" id="bk-date" value="${st.date}" min="${todayStr()}" max="${todayStr(60)}"/>
           <div class="quick-dates">
-            ${quick.map(([l, v]) => `<button class="chip-btn ${st.date === v ? 'sel' : ''}" data-date="${v}">${l}</button>`).join('')}
+            ${quick.map(([l, v]) => `<button class="chip-btn ${st.date === v ? 'sel' : ''}" data-date="${v}" aria-pressed="${st.date === v}">${l}</button>`).join('')}
           </div>
         </div>
       </div>
       <div class="when-row">
         <label class="fld-label">Na ile godzin</label>
         <div class="seg">
-          ${r.durations.map((d) => `<button class="seg-btn ${st.dur === d ? 'sel' : ''}" data-dur="${d}">${d} h</button>`).join('')}
+          ${r.durations.map((d) => `<button class="seg-btn ${st.dur === d ? 'sel' : ''}" data-dur="${d}" aria-pressed="${st.dur === d}">${d} h</button>`).join('')}
         </div>
       </div>
       <div class="when-row">
         <label class="fld-label">Start ${st.resource === 'bilard' ? '<span class="off-hint">· pn–czw przed 18:00 taniej</span>' : ''}</label>
         ${slots.length ? `<div class="slot-grid">
           ${slots.map((s) => `
-            <button class="slot ${st.start === s.start ? 'sel' : ''}" data-start="${s.start}" ${s.free === 0 ? 'disabled' : ''}>
+            <button class="slot ${st.start === s.start ? 'sel' : ''}" data-start="${s.start}" ${s.free === 0 ? 'disabled' : ''} aria-pressed="${st.start === s.start}" aria-label="${fmtTime(s.start)} — ${s.free === 0 ? 'brak miejsc' : `${s.free} ${freeWord(s.free, st.resource)}`}">
               <strong>${fmtTime(s.start)}</strong>
               <span>${s.free === 0 ? 'brak' : `${s.free} ${freeWord(s.free, st.resource)}`}</span>
             </button>`).join('')}
@@ -277,14 +295,14 @@ function stepParty() {
   return `
     <p class="bk-lead">Szczegóły imprezy <span class="bk-dim">${dateLabel(st.date)} · ${fmtTime(st.start)}–${fmtTime(st.start + st.dur * 60)}</span></p>
     <div class="when-row">
-      <label class="fld-label">Liczba gości: <strong id="guest-count">${st.guests}</strong></label>
-      <input type="range" id="bk-guests" min="${r.guests.min}" max="${r.guests.max}" value="${st.guests}" step="2"/>
+      <label class="fld-label" for="bk-guests">Liczba gości: <strong id="guest-count">${st.guests}</strong></label>
+      <input type="range" id="bk-guests" min="${r.guests.min}" max="${r.guests.max}" value="${st.guests}" step="2" aria-label="Liczba gości" aria-valuetext="${st.guests} osób"/>
     </div>
     <div class="when-row">
       <label class="fld-label">Pakiet</label>
       <div class="pkg-grid">
         ${r.packages.map((p) => `
-          <button class="pkg-card ${st.pkg === p.id ? 'sel' : ''}" data-pkg="${p.id}">
+          <button class="pkg-card ${st.pkg === p.id ? 'sel' : ''}" data-pkg="${p.id}" aria-pressed="${st.pkg === p.id}">
             <strong>${p.name}</strong>
             <span>${p.desc}</span>
             <em>${p.price === 0 ? 'w cenie' : p.perPerson ? `+${p.price} zł / os.` : `+${p.price} zł`}</em>
@@ -303,10 +321,10 @@ function stepDetails() {
       <span>${dateLabel(st.date)} · ${fmtTime(st.start)}–${fmtTime(st.start + st.dur * 60)}${st.resource === 'salka' ? ` · ${st.guests} osób` : ''}</span>
     </div>
     <div class="form-grid">
-      <label class="fld"><span>Imię i nazwisko *</span><input id="f-name" type="text" autocomplete="name" value="${st.name}" placeholder="np. Jan Bila"/></label>
-      <label class="fld"><span>Telefon *</span><input id="f-phone" type="tel" autocomplete="tel" value="${st.phone}" placeholder="np. 600 700 800"/></label>
-      <label class="fld fld-full"><span>E-mail (opcjonalnie)</span><input id="f-email" type="email" autocomplete="email" value="${st.email}" placeholder="np. jan@poczta.pl"/></label>
-      <label class="fld fld-full"><span>Uwagi</span><textarea id="f-notes" rows="2" placeholder="${st.resource === 'salka' ? 'np. urodziny 30-tki, prosimy o stół pod tort' : 'np. przyjdziemy z własnymi kijami'}">${st.notes}</textarea></label>
+      <label class="fld"><span>Imię i nazwisko *</span><input id="f-name" type="text" autocomplete="name" value="${esc(st.name)}" placeholder="np. Jan Bila"/></label>
+      <label class="fld"><span>Telefon *</span><input id="f-phone" type="tel" autocomplete="tel" value="${esc(st.phone)}" placeholder="np. 600 700 800"/></label>
+      <label class="fld fld-full"><span>E-mail (opcjonalnie)</span><input id="f-email" type="email" autocomplete="email" value="${esc(st.email)}" placeholder="np. jan@poczta.pl"/></label>
+      <label class="fld fld-full"><span>Uwagi</span><textarea id="f-notes" rows="2" placeholder="${st.resource === 'salka' ? 'np. urodziny 30-tki, prosimy o stół pod tort' : 'np. przyjdziemy z własnymi kijami'}">${esc(st.notes)}</textarea></label>
       <label class="consent fld-full"><input id="f-consent" type="checkbox" ${st.consent ? 'checked' : ''}/><span>Zgadzam się na kontakt telefoniczny lub SMS w sprawie tej rezerwacji. *</span></label>
     </div>
     <p class="err" id="f-err" hidden></p>`;
@@ -328,7 +346,7 @@ function stepDone() {
       <dl class="done-summary">
         <div><dt>Co</dt><dd>${what}${pkg && pkg.id !== 'none' ? ` · ${pkg.name}` : ''}</dd></div>
         <div><dt>Kiedy</dt><dd>${dateLabel(st.date)}, ${fmtTime(st.start)}–${fmtTime(st.start + st.dur * 60)}</dd></div>
-        <div><dt>Rezerwujący</dt><dd>${st.name} · ${st.phone}</dd></div>
+        <div><dt>Rezerwujący</dt><dd>${esc(st.name)} · ${esc(st.phone)}</dd></div>
         <div><dt>Do zapłaty na miejscu</dt><dd>${p.label} <span class="bk-dim">(${p.note})</span></dd></div>
       </dl>
       <p class="note">Potwierdzenie wyślemy SMS-em. Rezerwację możesz odwołać bezpłatnie do 4 h przed terminem — wystarczy telefon.</p>
@@ -382,6 +400,15 @@ function render() {
     </button>`;
 
   wire(cur);
+
+  // przy ZMIANIE kroku przenieś fokus na treść nowego kroku (po podmianie DOM)
+  if (st.step !== lastRenderedStep) {
+    lastRenderedStep = st.step;
+    const bodyEl = $('.bk-body');
+    requestAnimationFrame(() => {
+      if (overlay && bodyEl && !bodyEl.contains(document.activeElement)) focusFirst(bodyEl);
+    });
+  }
 }
 
 function wire(cur) {
@@ -432,12 +459,17 @@ function wire(cur) {
   }
 
   if (cur === 'Miejsce') {
-    overlay.querySelectorAll('.unit').forEach((u) =>
-      u.addEventListener('click', () => {
+    overlay.querySelectorAll('.unit').forEach((u) => {
+      const act = () => {
         if (u.classList.contains('busy')) { toastFn('Ten termin jest już zajęty — wybierz inny.', 'warn'); return; }
         st.unit = +u.dataset.unit;
         render();
-      }));
+      };
+      u.addEventListener('click', act);
+      u.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); act(); }
+      });
+    });
   }
 
   if (cur === 'Impreza') {
@@ -445,6 +477,7 @@ function wire(cur) {
     g?.addEventListener('input', () => {
       st.guests = +g.value;
       $('#guest-count').textContent = st.guests;
+      g.setAttribute('aria-valuetext', `${st.guests} osób`);
       const p = priceInfo();
       const priceEl = $('.bk-price');
       if (priceEl) priceEl.innerHTML = `<span class="bk-price-label">Razem</span><strong>${p.label}</strong><span class="bk-dim">${p.note}</span>`;
@@ -488,16 +521,16 @@ export function open(resource = 'bilard') {
   overlay = document.createElement('div');
   overlay.className = 'overlay bk-overlay';
   overlay.innerHTML = `
-    <div class="bk" role="dialog" aria-modal="true" aria-label="Rezerwacja">
-      <header class="bk-head">
+    <div class="bk" role="dialog" aria-modal="true" aria-label="Rezerwacja" tabindex="-1">
+      <div class="bk-head">
         <div class="bk-title"><strong>Rezerwacja</strong><span>zajmie ci to minutę</span></div>
         <button class="icon-btn bk-close" aria-label="Zamknij">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5.5 5.5l13 13M18.5 5.5l-13 13"/></svg>
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5.5 5.5l13 13M18.5 5.5l-13 13"/></svg>
         </button>
-      </header>
+      </div>
       <div class="bk-steps"></div>
       <div class="bk-body"></div>
-      <footer class="bk-foot"></footer>
+      <div class="bk-foot"></div>
     </div>`;
   root.appendChild(overlay);
   overlay.addEventListener('pointerdown', (e) => { if (e.target === overlay) close(); });
@@ -505,13 +538,20 @@ export function open(resource = 'bilard') {
   document.body.classList.add('booking-open');
   if (document.hidden) overlay.classList.add('show');
   else requestAnimationFrame(() => overlay.classList.add('show'));
+  setBackgroundInert(true); // wyłącz tło dla fokusu i czytnika ekranu
+  lastRenderedStep = -1;
   render();
+  releaseFocus = trapFocus(overlay.querySelector('.bk')); // fokus do dialogu + pułapka
 }
 
 export function close(immediate = false) {
   if (!overlay) return;
   const el = overlay;
   overlay = null;
+  setBackgroundInert(false);
+  releaseFocus?.(); // oddaj fokus wyzwalaczowi
+  releaseFocus = null;
+  lastRenderedStep = -1;
   el.classList.remove('show');
   document.body.classList.remove('booking-open');
   if (immediate) el.remove();

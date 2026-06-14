@@ -5,10 +5,7 @@ import '@fontsource-variable/bricolage-grotesque';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
-import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+// postprocessing (bloom) ładowane LENIWIE dopiero przy pierwszym włączeniu nocy — patrz ensurePostFX()
 
 import { tween, updateTweens, easeInOutCubic } from './tween.js';
 import { ATTRACTIONS, MODE_VIEWS } from './data.js';
@@ -36,7 +33,7 @@ const nextFrame = () => new Promise((r) => {
 
 async function init() {
   try {
-    await Promise.race([document.fonts.ready, new Promise((r) => setTimeout(r, 1500))]);
+    await Promise.race([document.fonts.ready, new Promise((r) => setTimeout(r, 1000))]);
   } catch { /* lecimy dalej */ }
 
   // ── renderer + tiery jakości ───────────────────────────────
@@ -141,19 +138,46 @@ async function init() {
   });
   labels.setMode('full');
 
-  // ── postprocessing (bloom nocą) ────────────────────────────
-  const rt = new THREE.WebGLRenderTarget(vw(), vh(), {
-    type: THREE.HalfFloatType,
-    samples: lowPower || isMobile ? 0 : 4,
-  });
-  const composer = new EffectComposer(renderer, rt);
-  composer.setPixelRatio(renderer.getPixelRatio()); // bufory w rozdzielczości efektywnej (DPR) od 1. klatki — noc nie rozmyta
-  composer.addPass(new RenderPass(scene, camera));
-  const bloomPass = new UnrealBloomPass(new THREE.Vector2(vw(), vh()), 0.0, 0.5, 0.82);
-  composer.addPass(bloomPass);
-  composer.addPass(new OutputPass());
+  // ── postprocessing (bloom) ładowane LENIWIE — dopiero gdy noc ──
+  // W dzień (domyślnie) renderujemy wprost; nie parsujemy ~34kB postprocessingu
+  // ani nie alokujemy render-targetów bloomu na starcie. Większość wejść nigdy nie tknie nocy.
+  let composer = null;
+  let bloomPass = null;
+  let postFXPromise = null;
+  async function ensurePostFX() {
+    if (composer) return;
+    if (!postFXPromise) {
+      postFXPromise = (async () => {
+        try {
+          const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { OutputPass }] = await Promise.all([
+            import('three/addons/postprocessing/EffectComposer.js'),
+            import('three/addons/postprocessing/RenderPass.js'),
+            import('three/addons/postprocessing/UnrealBloomPass.js'),
+            import('three/addons/postprocessing/OutputPass.js'),
+          ]);
+          const rt = new THREE.WebGLRenderTarget(vw(), vh(), {
+            type: THREE.HalfFloatType,
+            samples: lowPower || isMobile ? 0 : 4,
+          });
+          composer = new EffectComposer(renderer, rt);
+          composer.setPixelRatio(renderer.getPixelRatio()); // bufory w rozdzielczości efektywnej (DPR) — noc nie rozmyta
+          composer.addPass(new RenderPass(scene, camera));
+          bloomPass = new UnrealBloomPass(new THREE.Vector2(vw(), vh()), 0.0, 0.5, 0.82);
+          composer.addPass(bloomPass);
+          composer.addPass(new OutputPass());
+          composer.setSize(vw(), vh());
+          night.setBloom(bloomPass);
+          night.refresh();
+        } catch (e) {
+          postFXPromise = null; // błąd ładowania chunku → pozwól ponowić przy kolejnym kliknięciu
+          throw e;
+        }
+      })();
+    }
+    return postFXPromise;
+  }
 
-  const night = createNight({ scene, hemi, sun, barNight: bar.night, lampHeads, bloomPass });
+  const night = createNight({ scene, hemi, sun, barNight: bar.night, lampHeads });
 
   // ── ruch kamery ────────────────────────────────────────────
   // przesunięcie kadru, gdy otwarty jest panel (obiekt ląduje obok/nad panelem)
@@ -161,11 +185,12 @@ async function init() {
   function applyViewOffset() {
     const W = vw(), H = vh();
     if (panelOffset) {
-      if (W > 980) {
-        // desktop: panel po prawej → obiekt w lewej części kadru
+      // panel dokowany z PRAWEJ: desktop ORAZ telefon w poziomie (niski ekran) → obiekt w lewej części kadru
+      const panelRight = W > 980 || (W <= 980 && W > H && H <= 560);
+      if (panelRight) {
         camera.setViewOffset(W, H, Math.min(235, W * 0.17), 0, W, H);
       } else {
-        // mobile: panel to dolny arkusz (~46vh) → wynieś obiekt w górną strefę nad panel,
+        // pionowy mobile: panel to dolny arkusz (~46vh) → wynieś obiekt w górną strefę nad panel,
         // ale nie pod topbar (offset dobrany tak, by środek strefy był ok. 30% wysokości)
         camera.setViewOffset(W, H, 0, Math.round(H * 0.22), W, H);
       }
@@ -252,7 +277,7 @@ async function init() {
     focusAttraction,
     resetCamera,
     setMode,
-    toggleNight: () => night.toggle(),
+    toggleNight: async () => { await ensurePostFX(); return night.toggle(); },
     setLabelActive: (id) => labels.setActive(id),
   });
   syncModeUI('full');
@@ -267,11 +292,12 @@ async function init() {
     frameCount++;
     const dt = now - lastT;
     lastT = now;
-    if (frameCount > 10 && dt > 80) slowFrames++;
-    if (slowFrames > 14) {
+    // reaguj szybciej: liczymy klatki wolniejsze niż ~20 fps i schodzimy w eko-tier po 8 takich
+    if (frameCount > 4 && dt > 50) slowFrames++;
+    if (slowFrames > 8) {
       lowPower = true;
       renderer.setPixelRatio(0.75);
-      composer.setPixelRatio(0.75); // downgrade obejmuje też łańcuch postprocessingu (bloom nocą)
+      if (composer) composer.setPixelRatio(0.75); // downgrade obejmuje też postprocessing (jeśli już wczytany)
       renderer.shadowMap.enabled = false;
       sun.castShadow = false;
       console.info('[rikoszet] tryb oszczędny: wyłączam cienie i obniżam rozdzielczość');
@@ -284,8 +310,7 @@ async function init() {
     applyViewOffset(); // offset liczony od bieżącego rozmiaru
     camera.updateProjectionMatrix();
     renderer.setSize(vw(), vh());
-    composer.setSize(vw(), vh());
-    bloomPass.setSize(vw(), vh());
+    if (composer) { composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(vw(), vh()); bloomPass.setSize(vw(), vh()); }
     labelRenderer.setSize(vw(), vh());
   }
   addEventListener('resize', onResize);
@@ -316,8 +341,8 @@ async function init() {
     }
     controls.update();
     // w dzień (brak bloomu) renderujemy wprost — pomijamy kosztowny łańcuch postprocessingu;
-    // composer wchodzi tylko, gdy świeci noc (night.t > 0)
-    if (night.t === 0) {
+    // composer wchodzi tylko, gdy świeci noc (night.t > 0) i postprocessing jest już wczytany
+    if (night.t === 0 || !composer) {
       renderer.render(scene, camera);
     } else {
       composer.render();

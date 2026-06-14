@@ -1,10 +1,13 @@
 // Cały interfejs 2D: topbar, panel atrakcji, modale, statusy, toasty.
 import { BRAND, ATTRACTIONS, HOURS, PROGRAM, PRICING, openState, fmtTime } from './data.js';
 import { art, LOGO_SVG } from './svgart.js';
+import { trapFocus, focusFirst, setBackgroundInert } from './a11y.js';
 import * as booking from './booking.js';
 
 let deps = null; // { focusAttraction, resetCamera, toggleNight, setLabelActive }
 let drawerEl, modalRoot, toastRoot, statusChip;
+let releaseModalFocus = null; // pułapka fokusu aktywnego modala
+let drawerReturnFocus = null; // element, do którego wraca fokus po zamknięciu panelu
 
 const $ = (sel, root = document) => root.querySelector(sel);
 
@@ -41,6 +44,10 @@ export function closeModal() {
   openModalEl.classList.remove('show');
   const el = openModalEl;
   openModalEl = null;
+  setBackgroundInert(false);
+  document.querySelector('.burger')?.setAttribute('aria-expanded', 'false');
+  releaseModalFocus?.(); // oddaj fokus wyzwalaczowi
+  releaseModalFocus = null;
   setTimeout(() => el.remove(), 280);
   document.body.classList.remove('modal-open');
 }
@@ -50,11 +57,11 @@ export function openModal({ title, body, wide = false, className = '' }) {
   const ov = document.createElement('div');
   ov.className = `overlay ${className}`;
   ov.innerHTML = `
-    <div class="modal ${wide ? 'modal-wide' : ''}" role="dialog" aria-modal="true" aria-label="${title}">
-      <header class="modal-head">
+    <div class="modal ${wide ? 'modal-wide' : ''}" role="dialog" aria-modal="true" aria-label="${title}" tabindex="-1">
+      <div class="modal-head">
         <h2>${title}</h2>
         <button class="icon-btn modal-close" aria-label="Zamknij">${ICO.close}</button>
-      </header>
+      </div>
       <div class="modal-body">${body}</div>
     </div>`;
   modalRoot.appendChild(ov);
@@ -64,6 +71,9 @@ export function openModal({ title, body, wide = false, className = '' }) {
   document.body.classList.add('modal-open');
   if (document.hidden) ov.classList.add('show');
   else requestAnimationFrame(() => ov.classList.add('show'));
+  setBackgroundInert(true); // wyłącz tło dla fokusu i czytnika ekranu
+  const dialog = $('.modal', ov);
+  releaseModalFocus = trapFocus(dialog, { initial: dialog }); // fokus do dialogu + pułapka, restore na zamknięciu
   return ov;
 }
 
@@ -128,8 +138,12 @@ export function openAttraction(id) {
     })
   );
 
+  const wasOpen = drawerEl.classList.contains('open');
+  if (!wasOpen) drawerReturnFocus = document.activeElement; // zapamiętaj wyzwalacz przy pierwszym otwarciu
   document.body.classList.add('drawer-open');
   drawerEl.classList.add('open');
+  drawerEl.setAttribute('tabindex', '-1');
+  drawerEl.focus({ preventScroll: true }); // fokus do panelu (czytnik odczyta „Szczegóły atrakcji")
   deps.setLabelActive(id);
   deps.focusAttraction(id);
 }
@@ -139,6 +153,8 @@ export function closeAttraction() {
   document.body.classList.remove('drawer-open');
   drawerEl.classList.remove('open');
   deps.setLabelActive(null);
+  if (drawerReturnFocus?.isConnected) drawerReturnFocus.focus({ preventScroll: true });
+  drawerReturnFocus = null;
   deps.resetCamera();
 }
 
@@ -248,8 +264,11 @@ export function openAttractionsList() {
 
 /** Podświetlenie aktywnego trybu w przełączniku pięter. */
 export function syncModeUI(mode) {
-  document.querySelectorAll('.fs-btn').forEach((b) =>
-    b.classList.toggle('sel', b.dataset.mode === mode));
+  document.querySelectorAll('.fs-btn').forEach((b) => {
+    const on = b.dataset.mode === mode;
+    b.classList.toggle('sel', on);
+    b.setAttribute('aria-pressed', String(on));
+  });
 }
 
 // ── status otwarcia ─────────────────────────────────────────
@@ -270,7 +289,7 @@ export function mountUI(d) {
         ${LOGO_SVG}
         <span class="brand-text"><strong>${BRAND.name}</strong><span>${BRAND.tagline}</span></span>
       </button>
-      <nav class="topnav">
+      <nav class="topnav" aria-label="Sekcje">
         <button data-nav="attractions">Atrakcje</button>
         <button data-nav="program">Program</button>
         <button data-nav="pricing">Cennik</button>
@@ -278,39 +297,41 @@ export function mountUI(d) {
       </nav>
       <div class="topbar-right">
         <button class="btn btn-primary btn-book" data-nav="booking">Zarezerwuj</button>
-        <button class="icon-btn burger" data-nav="menu" aria-label="Menu">${ICO.burger}</button>
+        <button class="icon-btn burger" data-nav="menu" aria-label="Menu" aria-haspopup="dialog" aria-expanded="false">${ICO.burger}</button>
       </div>
     </header>
 
     <aside class="drawer" id="drawer" aria-label="Szczegóły atrakcji"></aside>
 
-    <button class="chip status-chip" id="status-chip">
-      <span class="dot"></span><span class="chip-label">…</span>
-    </button>
-
-    <div class="view-controls">
-      <button class="icon-btn ctl" id="night-btn" aria-label="Tryb nocny" data-tip="Tryb nocny">${ICO.moon}</button>
-      <button class="icon-btn ctl" id="reset-btn" aria-label="Resetuj widok" data-tip="Resetuj widok">${ICO.reset}</button>
-    </div>
-
-    <div class="floor-switch" id="floor-switch" role="group" aria-label="Widok budynku">
-      <button data-mode="full" class="fs-btn sel">
-        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 11.5 12 5l8 6.5"/><path d="M6.5 10.5V19h11v-8.5"/></svg>
-        Budynek
+    <nav class="hud" aria-label="Sterowanie sceną">
+      <button class="chip status-chip" id="status-chip" aria-label="Status otwarcia i kontakt">
+        <span class="dot"></span><span class="chip-label">…</span>
       </button>
-      <button data-mode="parter" class="fs-btn">
-        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="5" y="13" width="14" height="7" rx="1.5"/><path d="M5 9h14" stroke-dasharray="3 2.4"/></svg>
-        Parter
-      </button>
-      <button data-mode="pietro" class="fs-btn">
-        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="5" y="4" width="14" height="7.5" rx="1.5" stroke-dasharray="3 2.4"/><rect x="5" y="13" width="14" height="7" rx="1.5"/></svg>
-        Piętro
-      </button>
-    </div>
 
-    <div class="hint" id="hint">${matchMedia('(pointer: coarse)').matches
-      ? 'Obracaj palcem · szczypnij, aby przybliżyć · stukaj znaczniki <b>+</b>'
-      : 'Przeciągnij, by obrócić · kółko przybliża · klikaj <b>+</b> · klawisze <b>1·2·3</b>'}</div>
+      <div class="view-controls">
+        <button class="icon-btn ctl" id="night-btn" aria-label="Tryb nocny" aria-pressed="false" data-tip="Tryb nocny">${ICO.moon}</button>
+        <button class="icon-btn ctl" id="reset-btn" aria-label="Resetuj widok" data-tip="Resetuj widok">${ICO.reset}</button>
+      </div>
+
+      <div class="floor-switch" id="floor-switch" role="group" aria-label="Widok budynku">
+        <button data-mode="full" class="fs-btn sel" aria-pressed="true">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M4 11.5 12 5l8 6.5"/><path d="M6.5 10.5V19h11v-8.5"/></svg>
+          Budynek
+        </button>
+        <button data-mode="parter" class="fs-btn" aria-pressed="false">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="13" width="14" height="7" rx="1.5"/><path d="M5 9h14" stroke-dasharray="3 2.4"/></svg>
+          Parter
+        </button>
+        <button data-mode="pietro" class="fs-btn" aria-pressed="false">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="4" width="14" height="7.5" rx="1.5" stroke-dasharray="3 2.4"/><rect x="5" y="13" width="14" height="7" rx="1.5"/></svg>
+          Piętro
+        </button>
+      </div>
+
+      <div class="hint" id="hint">${matchMedia('(pointer: coarse)').matches
+        ? 'Obracaj palcem · szczypnij, aby przybliżyć · stukaj znaczniki <b>+</b>'
+        : 'Przeciągnij, by obrócić · kółko przybliża · klikaj <b>+</b> · klawisze <b>1·2·3</b>'}</div>
+    </nav>
 
     <footer class="credit">
       <span>© 2026 ${BRAND.name}</span>
@@ -321,7 +342,7 @@ export function mountUI(d) {
     </footer>
 
     <div id="modal-root"></div>
-    <div id="toast-root"></div>`;
+    <div id="toast-root" aria-live="polite" aria-atomic="false"></div>`;
 
   drawerEl = $('#drawer', ui);
   modalRoot = $('#modal-root', ui);
@@ -344,10 +365,20 @@ export function mountUI(d) {
 
   statusChip.addEventListener('click', openContact);
 
-  $('#night-btn', ui).addEventListener('click', () => {
-    const mode = deps.toggleNight();
-    $('#night-btn', ui).innerHTML = mode === 'night' ? ICO.sun : ICO.moon;
-    $('#night-btn', ui).dataset.tip = mode === 'night' ? 'Tryb dzienny' : 'Tryb nocny';
+  $('#night-btn', ui).addEventListener('click', async () => {
+    const nb = $('#night-btn', ui);
+    nb.disabled = true; // krótka blokada na czas leniwego wczytania postprocessingu
+    try {
+      const mode = await deps.toggleNight();
+      nb.innerHTML = mode === 'night' ? ICO.sun : ICO.moon;
+      nb.dataset.tip = mode === 'night' ? 'Tryb dzienny' : 'Tryb nocny';
+      nb.setAttribute('aria-label', mode === 'night' ? 'Tryb dzienny' : 'Tryb nocny');
+      nb.setAttribute('aria-pressed', String(mode === 'night'));
+    } catch {
+      toast('Tryb nocny chwilowo niedostępny — spróbuj ponownie.', 'warn');
+    } finally {
+      nb.disabled = false; // przycisk zawsze wraca do użycia
+    }
   });
   $('#reset-btn', ui).addEventListener('click', () => { closeAttraction(); });
 
@@ -408,6 +439,7 @@ function openMobileMenu() {
       <p class="note status-line ${st.open ? 'is-open' : 'is-closed'}"><span class="dot"></span>${st.label}</p>
     </div>`;
   const m = openModal({ title: BRAND.name, body });
+  document.querySelector('.burger')?.setAttribute('aria-expanded', 'true');
   m.querySelectorAll('[data-mm]').forEach((b) =>
     b.addEventListener('click', () => {
       closeModal();
