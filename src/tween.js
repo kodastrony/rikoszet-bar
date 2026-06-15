@@ -1,6 +1,9 @@
 // Minimalny silnik animacji oparty o requestAnimationFrame głównej pętli.
 export const easeInOutCubic = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 export const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+// ostrzejsze niż cubic: łagodny start, długi, miękki „dolot" — kinowy najazd kamery
+export const easeInOutQuart = (t) => (t < 0.5 ? 8 * t * t * t * t : 1 - Math.pow(-2 * t + 2, 4) / 2);
+export const easeOutQuint = (t) => 1 - Math.pow(1 - t, 5);
 
 const active = new Set();
 

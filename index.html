@@ -8,7 +8,7 @@
   <title>RIKOSZET — Bar &amp; Klub Gier · Bilard, Rzutki, Karaoke · Wrocław</title>
   <meta name="description" content="RIKOSZET — bar i klub gier w starej rozlewni przy Słodowej 8 we Wrocławiu. Bilard, rzutki, karaoke i scena pod jednym dachem. Zwiedź lokal w 3D i zarezerwuj stół, tor albo salkę na imprezę." />
   <meta name="author" content="RIKOSZET" />
-  <meta name="theme-color" content="#10231b" />
+  <meta name="theme-color" content="#f2efe7" />
   <link rel="canonical" href="https://kodastrony.github.io/rikoszet-bar/" />
   <meta name="robots" content="index, follow" />
 
@@ -77,38 +77,254 @@
   </script>
 
   <style>
-    /* Krytyczny ekran startowy — widoczny od pierwszej klatki, zanim wczyta się JS/3D. */
-    html, body { margin: 0; background: #10231b; }
+    /* ── Krytyczny ekran startowy „RIKOSZET" — plakat na papierze ─────────────
+       Widoczny od pierwszej klatki, zanim wczyta się JS/3D. Tło ustawione i na
+       html,body, i na #splash → zero mignięcia koloru. Fonty podane wprost z
+       fallbackiem: zmienne --font-* dochodzą dopiero z JS (styles.css) i nie ma
+       ich przy pierwszym malowaniu. */
+    html, body { margin: 0; background: #f2efe7; }
+
     #splash {
       position: fixed; inset: 0; z-index: 96;
       display: grid; place-items: center;
-      background: radial-gradient(120% 90% at 50% 22%, #1c4434 0%, #10231b 60%, #0a1812 100%);
-      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-      transition: opacity 0.6s ease;
-      pointer-events: auto; /* stuknij/kliknij gdziekolwiek na splashu, aby wejść od razu */
+      /* Ciepłe światło sączy się LEKKO OD ŚRODKA-W-LEWO (48%) — asymetryczne,
+         „umotywowane" zamiast symetrycznego radiala; słabsza poświata w prawym
+         dole, a u dołu papier ciemnieje ku --cream-2 jak nasiąknięty tuszem. */
+      background:
+        radial-gradient(120% 70% at 48% -6%, rgba(224,164,60,0.10) 0%, rgba(224,164,60,0.035) 30%, rgba(224,164,60,0) 58%),
+        radial-gradient(90% 70% at 86% 112%, rgba(20,53,39,0.05) 0%, rgba(20,53,39,0) 55%),
+        radial-gradient(140% 92% at 48% -10%, rgba(33,38,31,0.06) 0%, rgba(33,38,31,0) 50%),
+        linear-gradient(178deg, #f4f1ea 0%, #f2efe7 50%, #ece7d8 100%);
+      background-color: #f2efe7;
+      color: #21261f;
+      font-family: 'Inter Variable', system-ui, -apple-system, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      transition: opacity 0.6s ease; /* opacity prowadzi JS przy najeździe kamery */
+      pointer-events: auto;          /* stuknij gdziekolwiek na splashu, aby wejść od razu */
+      overflow: hidden;
     }
-    #splash .splash-inner { text-align: center; color: #f2e9d6; padding: 24px; max-width: 480px; }
-    #splash .logo-mark { width: 76px; height: 76px; animation: introBall 1.3s cubic-bezier(.34,1.4,.44,1) both; }
-    #splash .splash-name { margin: 18px 0 3px; font-size: clamp(54px, 9vw, 98px); font-weight: 800; letter-spacing: 0.05em; line-height: 1; }
-    #splash .splash-tag { margin: 0; font-size: 12.5px; font-weight: 700; letter-spacing: 0.42em; text-transform: uppercase; color: #e3a93c; }
-    #splash .splash-claim { margin: 22px auto 0; max-width: 420px; font-size: 15.5px; line-height: 1.6; color: #cfd8c8; }
+
+    /* Ledwie widoczne ziarno papieru: jedna tania warstwa, niskie krycie, powolny dryf. */
+    #splash::before {
+      content: ""; position: absolute; inset: -48px; z-index: 0; pointer-events: none;
+      background-image:
+        repeating-linear-gradient(58deg, rgba(33,38,31,0.020) 0 1px, transparent 1px 4px),
+        repeating-linear-gradient(-27deg, rgba(33,38,31,0.016) 0 1px, transparent 1px 5px);
+      opacity: 0.9; mix-blend-mode: multiply;
+      animation: rkPaperDrift 26s linear infinite both;
+    }
+
+    /* Szept zieleni u dołu — jak tusz wsiąkający w dolną krawędź; kotwiczy jasne pole. */
+    #splash::after {
+      content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 38%; z-index: 0;
+      pointer-events: none;
+      background: linear-gradient(180deg, rgba(20,53,39,0) 0%, rgba(20,53,39,0.055) 100%);
+    }
+
+    /* ── plansza druku: włosowa ramka tuszu na papierze, lekki blik, miękki cień ── */
+    #splash .splash-inner {
+      position: relative; z-index: 1;
+      text-align: center;
+      width: min(560px, calc(100vw - 44px));
+      padding: clamp(30px, 6vw, 54px) clamp(22px, 5vw, 46px);
+      border: 1px solid rgba(33,38,31,0.16);
+      border-radius: 2px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.22), rgba(233,228,212,0.08));
+      box-shadow:
+        inset 0 0 0 1px rgba(255,255,255,0.55),
+        inset 0 1px 0 rgba(255,255,255,0.7),
+        0 26px 64px -44px rgba(33,38,31,0.5),
+        0 2px 0 rgba(255,255,255,0.6);
+      animation: rkPlateIn 0.9s cubic-bezier(.22,.7,.24,1) both;
+    }
+
+    /* ── nadkreślenie: prawdziwy adres kapitalikami, włosowe linie, jedna iskra ambry ── */
+    #splash .splash-kicker {
+      display: flex; align-items: center; justify-content: center; gap: 11px;
+      margin: 0 0 clamp(20px, 4vw, 30px);
+      font-size: clamp(10px, 1.5vw, 10.5px); font-weight: 700; letter-spacing: 0.32em;
+      text-transform: uppercase; color: #4c5249; /* przyciszony tusz, ≥6.3:1 też na --cream-2 */
+      animation: rkRiseIn 0.85s cubic-bezier(.22,.7,.24,1) 0.04s both;
+    }
+    #splash .splash-kicker::before,
+    #splash .splash-kicker::after {
+      content: ""; height: 1px; flex: 1 1 auto; max-width: 84px;
+      background: linear-gradient(90deg, transparent, rgba(33,38,31,0.34));
+    }
+    #splash .splash-kicker::after { transform: scaleX(-1); }
+    #splash .splash-kicker b { font-weight: 800; color: #21261f; letter-spacing: 0.30em; }
+    #splash .splash-kicker .dot {
+      width: 5px; height: 5px; border-radius: 50%; background: #e0a43c;
+      box-shadow: 0 0 0 3px rgba(224,164,60,0.16), 0 1px 0 rgba(176,125,30,0.55);
+      flex: 0 0 auto;
+    }
+
+    /* ── godło bili „8": wytłoczona, przestrzenna pieczęć (głębia niesiona w SVG) ── */
+    #splash .logo-mark {
+      width: clamp(60px, 12vw, 76px); height: clamp(60px, 12vw, 76px);
+      display: block; margin: 0 auto clamp(16px, 3vw, 22px);
+      filter: drop-shadow(0 6px 12px rgba(33,38,31,0.22));
+      animation: rkSealIn 0.9s cubic-bezier(.28,.9,.24,1.02) 0.06s both;
+    }
+
+    /* ── logotyp: bohater kadru ── */
+    #splash .splash-name {
+      margin: 0;
+      font-family: 'Bricolage Grotesque Variable', 'Inter Variable', system-ui, sans-serif;
+      font-weight: 800;
+      font-size: clamp(50px, 13vw, 104px);
+      line-height: 0.9;
+      letter-spacing: 0.004em;
+      color: #21261f;
+      text-transform: uppercase;
+      /* delikatny emboss od górnego światła */
+      text-shadow: 0 1px 0 rgba(255,255,255,0.6), 0 -1px 0 rgba(33,38,31,0.04);
+      animation: rkRiseIn 0.85s cubic-bezier(.22,.7,.24,1) 0.12s both;
+    }
+
+    /* ── tag: marka w zieleni, rozstrzelone kapitaliki ── */
+    #splash .splash-tag {
+      margin: clamp(12px, 2.4vw, 16px) 0 0;
+      font-size: clamp(11px, 1.7vw, 13px); font-weight: 700;
+      letter-spacing: 0.44em; text-transform: uppercase; color: #143527;
+      padding-left: 0.44em; /* kompensuje światło po ostatniej literze → optycznie wyśrodkowane */
+      animation: rkRiseIn 0.85s cubic-bezier(.22,.7,.24,1) 0.18s both;
+    }
+
+    /* ── krótka linia ── */
+    #splash .splash-rule {
+      width: 44px; height: 2px; margin: clamp(18px, 3.4vw, 26px) auto 0;
+      background: #143527; border-radius: 2px;
+      transform-origin: center;
+      animation: rkRuleIn 0.7s cubic-bezier(.22,.7,.24,1) 0.26s both;
+    }
+
+    /* ── claim: kursywa, wygodny kontrast ── */
+    #splash .splash-claim {
+      margin: clamp(16px, 3vw, 22px) auto 0;
+      max-width: 34ch;
+      font-size: clamp(14px, 2vw, 16px); line-height: 1.62;
+      color: #34392f; /* ~9.3:1 nawet na --cream-2 */
+      font-style: italic;
+      animation: rkRiseIn 0.85s cubic-bezier(.22,.7,.24,1) 0.24s both;
+    }
+
+    /* ── pasek ładowania: szczelina w papierze z foliowym, ambrowym wypełnieniem ── */
     #splash .splash-loader {
-      margin: 40px auto 0; width: 188px; height: 4px; border-radius: 999px;
-      background: rgba(242,233,214,0.16); overflow: hidden;
+      position: relative;
+      margin: clamp(30px, 5.5vw, 42px) auto 0; width: min(224px, 62%); height: 3px;
+      border-radius: 999px;
+      background: rgba(33,38,31,0.12);
+      box-shadow: inset 0 0 0 1px rgba(33,38,31,0.05);
+      overflow: hidden;
+      animation: rkRiseIn 0.85s cubic-bezier(.22,.7,.24,1) 0.3s both;
     }
     #splash .splash-loader > i {
       display: block; height: 100%; width: 8%; border-radius: 999px;
-      background: linear-gradient(90deg, #e3a93c, #f2d28a);
-      transition: width 0.5s cubic-bezier(.3,.9,.24,1);
+      position: relative;
+      background: linear-gradient(90deg, #c98f2c 0%, #e0a43c 52%, #f0c069 100%);
+      box-shadow: 0 0 0 1px rgba(176,125,30,0.25);
+      transition: width 0.5s cubic-bezier(.3,.9,.24,1); /* szerokość ustawia JS */
     }
+    #splash .splash-loader > i::after {
+      content: ""; position: absolute; inset: 0;
+      background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,252,240,0.6) 50%, rgba(255,255,255,0) 100%);
+      transform: translateX(-100%);
+      animation: rkSheen 2.4s ease-in-out infinite;
+    }
+
+    /* ── status ── */
     #splash .splash-status {
-      margin: 14px 0 0; font-size: 11px; font-weight: 600; letter-spacing: 0.16em;
-      text-transform: uppercase; color: #8aa091;
+      margin: clamp(13px, 2.4vw, 16px) 0 0;
+      font-size: clamp(10px, 1.5vw, 10.5px); font-weight: 600; letter-spacing: 0.2em;
+      text-transform: uppercase; color: #4c5249; /* ≥6.3:1 na --cream-2, wygodne AA */
+      animation: rkRiseIn 0.85s cubic-bezier(.22,.7,.24,1) 0.34s both;
     }
-    @keyframes introBall { 0% { transform: translateY(-44px) rotate(-130deg); opacity: 0; } 100% { transform: none; opacity: 1; } }
+
+    /* ── klatki kluczowe ── */
+    @keyframes rkPlateIn { 0% { transform: translateY(10px) scale(0.992); opacity: 0; } 100% { transform: none; opacity: 1; } }
+    @keyframes rkSealIn  { 0% { transform: translateY(-12px) scale(0.88); opacity: 0; } 100% { transform: none; opacity: 1; } }
+    @keyframes rkRiseIn  { 0% { transform: translateY(12px); opacity: 0; } 100% { transform: none; opacity: 1; } }
+    @keyframes rkRuleIn  { 0% { transform: scaleX(0); opacity: 0; } 100% { transform: scaleX(1); opacity: 1; } }
+    @keyframes rkPaperDrift { 0% { transform: translate(0, 0); } 100% { transform: translate(0, -4px); } }
+    @keyframes rkSheen { 0% { transform: translateX(-100%); } 58%, 100% { transform: translateX(260%); } }
+
+    /* ── wyjście „odlot plakatu" ─────────────────────────────────────────────
+       Sterowane klasą .leaving (JS dodaje ją, gdy rusza najazd kamery). Animujemy
+       WYŁĄCZNIE opacity i transform → kompozytor; płynne nawet, gdy wątek główny
+       renderuje scenę 3D. Treść unosi się schodkami (follow-through), plansza
+       odlatuje tuż za nią, a papier gaśnie na końcu, odsłaniając świat w ruchu. */
+    #splash.leaving { pointer-events: none; }
+    #splash.leaving .splash-kicker,
+    #splash.leaving .logo-mark,
+    #splash.leaving .splash-name,
+    #splash.leaving .splash-tag,
+    #splash.leaving .splash-rule,
+    #splash.leaving .splash-claim,
+    #splash.leaving .splash-loader,
+    #splash.leaving .splash-status {
+      animation: none; /* oddaj kontrolę nad opacity/transform tranzycjom wyjścia */
+      will-change: opacity, transform;
+      opacity: 0;
+      transform: translateY(-14px);
+      transition: opacity 0.5s cubic-bezier(.4,0,1,1), transform 0.66s cubic-bezier(.5,0,.18,1);
+    }
+    /* follow-through: dół wychodzi pierwszy, godło i logotyp na końcu */
+    #splash.leaving .splash-status { transition-delay: 0ms; }
+    #splash.leaving .splash-loader { transition-delay: 36ms; }
+    #splash.leaving .splash-claim  { transition-delay: 72ms; }
+    #splash.leaving .splash-rule   { transition-delay: 100ms; }
+    #splash.leaving .splash-tag    { transition-delay: 128ms; }
+    #splash.leaving .splash-name   { transition-delay: 160ms; }
+    #splash.leaving .logo-mark     { transition-delay: 200ms; }
+    #splash.leaving .splash-kicker { transition-delay: 232ms; }
+    /* plansza unosi się i gaśnie tuż za treścią */
+    #splash.leaving .splash-inner {
+      animation: none;
+      will-change: opacity, transform;
+      opacity: 0;
+      transform: translateY(-10px) scale(1.025);
+      transition: opacity 0.55s ease 0.16s, transform 0.72s cubic-bezier(.5,0,.18,1) 0.1s;
+    }
+    /* papier ustępuje scenie 3D na końcu */
+    #splash.leaving {
+      opacity: 0;
+      transition: opacity 0.6s ease 0.26s;
+    }
+    /* pominięcie / szybkie domknięcie: jednolite, bez schodków */
+    #splash.leaving.leaving-fast,
+    #splash.leaving.leaving-fast .splash-inner,
+    #splash.leaving.leaving-fast .splash-kicker,
+    #splash.leaving.leaving-fast .logo-mark,
+    #splash.leaving.leaving-fast .splash-name,
+    #splash.leaving.leaving-fast .splash-tag,
+    #splash.leaving.leaving-fast .splash-rule,
+    #splash.leaving.leaving-fast .splash-claim,
+    #splash.leaving.leaving-fast .splash-loader,
+    #splash.leaving.leaving-fast .splash-status {
+      transition-duration: 0.34s;
+      transition-delay: 0ms;
+    }
+
+    /* ── dostępność: ograniczony ruch — przypnij KAŻDY animowany węzeł do stanu
+       końcowego, żeby nic nie zostało uwięzione na opacity:0 ── */
     @media (prefers-reduced-motion: reduce) {
-      #splash .logo-mark { animation: none; }
       #splash { transition: none; }
+      #splash::before { animation: none; }
+      #splash .splash-loader > i::after { animation: none; display: none; }
+      #splash .splash-inner,
+      #splash .splash-kicker,
+      #splash .logo-mark,
+      #splash .splash-name,
+      #splash .splash-tag,
+      #splash .splash-rule,
+      #splash .splash-claim,
+      #splash .splash-loader,
+      #splash .splash-status {
+        animation: none !important;
+        opacity: 1 !important;
+        transform: none !important;
+      }
     }
   </style>
 </head>
@@ -126,15 +342,38 @@
   <div id="story" aria-label="Wprowadzenie">
     <div class="splash" id="splash">
       <div class="splash-inner">
-        <svg viewBox="0 0 40 40" class="logo-mark" width="76" height="76" aria-hidden="true">
-          <circle cx="20" cy="20" r="18.5" fill="#10231b"/>
-          <circle cx="20" cy="20" r="18.5" fill="none" stroke="#e3a93c" stroke-width="2.2"/>
-          <circle cx="20" cy="15.4" r="8.6" fill="#f2e9d6"/>
-          <text x="20" y="19.8" font-size="12.5" font-weight="800" text-anchor="middle" fill="#10231b" font-family="'Bricolage Grotesque Variable',sans-serif">8</text>
+        <p class="splash-kicker"><span class="dot" aria-hidden="true"></span><b>Wrocław</b> · ul. Słodowa 8</p>
+
+        <svg viewBox="0 0 64 64" class="logo-mark" width="76" height="76" role="img" aria-label="Bila numer osiem — godło RIKOSZET">
+          <defs>
+            <!-- bryła bili: oświetlona z górnego-lewa, jak światło w sali -->
+            <radialGradient id="rkSeal" cx="38%" cy="32%" r="80%">
+              <stop offset="0%" stop-color="#235140"/>
+              <stop offset="48%" stop-color="#143527"/>
+              <stop offset="100%" stop-color="#0c2419"/>
+            </radialGradient>
+            <!-- wgłębione, kremowe pole numeru -->
+            <radialGradient id="rkWell" cx="42%" cy="36%" r="72%">
+              <stop offset="0%" stop-color="#ffffff"/>
+              <stop offset="62%" stop-color="#f2efe7"/>
+              <stop offset="100%" stop-color="#ddd6c4"/>
+            </radialGradient>
+          </defs>
+          <ellipse cx="32" cy="59.5" rx="18" ry="2.6" fill="#21261f" opacity="0.16"/>
+          <circle cx="32" cy="31" r="30" fill="url(#rkSeal)"/>
+          <circle cx="32" cy="31" r="29" fill="none" stroke="#0c2419" stroke-width="1.1" opacity="0.55"/>
+          <circle cx="32" cy="30.4" r="28.4" fill="none" stroke="#3a6a57" stroke-width="0.9" opacity="0.5"/>
+          <ellipse cx="23" cy="19" rx="9.5" ry="6" fill="#ffffff" opacity="0.10"/>
+          <circle cx="32" cy="24.6" r="13" fill="url(#rkWell)"/>
+          <circle cx="32" cy="24.6" r="13" fill="none" stroke="#143527" stroke-width="0.7" opacity="0.18"/>
+          <text x="32" y="29.6" font-size="17.5" font-weight="800" text-anchor="middle" fill="#143527" font-family="'Bricolage Grotesque Variable',sans-serif">8</text>
         </svg>
+
         <div class="splash-name">RIKOSZET</div>
         <p class="splash-tag">Bar &amp; Klub Gier</p>
+        <div class="splash-rule" aria-hidden="true"></div>
         <p class="splash-claim">Bilard, rzutki i karaoke pod jednym dachem starej rozlewni.</p>
+
         <div class="splash-loader" aria-hidden="true"><i id="splash-bar"></i></div>
         <p class="splash-status" id="splash-status" role="status" aria-live="polite">Wczytywanie lokalu…</p>
       </div>

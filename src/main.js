@@ -317,13 +317,17 @@ async function init() {
 
   let lastW = vw(), lastH = vh();
   let lastNow = performance.now();
+  const introFrames = import.meta.env.DEV ? [] : null;
   function tick(now) {
     if (lastW !== vw() || lastH !== vh()) {
       lastW = vw(); lastH = vh();
       onResize();
     }
-    const dt = Math.min(60, now - lastNow);
+    const rawDt = now - lastNow;
+    const dt = Math.min(60, rawDt);
     lastNow = now;
+    // DEV: zbieraj deltę klatek w czasie najazdu, by zmierzyć płynność (window.__rks.introFrames)
+    if (import.meta.env.DEV && introFrames && intro.started() && !intro.finished()) introFrames.push(Math.round(rawDt));
     maybeDowngrade(now);
     updateTweens(now);
     intro.update(now);
@@ -351,19 +355,23 @@ async function init() {
   }
   renderer.setAnimationLoop(tick);
 
-  // jedna złożona klatka zanim ruszy najazd (gładkie odsłonięcie)
-  intro.setProgress(0.92, 'Prawie gotowe…');
+  // wnętrza budujemy POD splashem (nie w trakcie najazdu) — żaden mebel nie dokłada
+  // zacięcia w czasie odsłonięcia; to była główna przyczyna „szarpania" intra
+  intro.setProgress(0.84, 'Meblujemy wnętrza…');
+  await nextFrame();
+  const ints = buildInteriors(scene, { night: bar.night, mats: bar.mats, nightT: night.t });
+  modes.attachInteriors(ints);
+  night.refresh();
+
+  // rozgrzewka: kompilacja shaderów + kilka ciężkich klatek jeszcze pod splashem,
+  // żeby pierwsze klatki najazdu były już „ciepłe" i gładkie (bez kompilacji w ruchu)
+  intro.setProgress(0.95, 'Rozgrzewamy światła…');
+  await nextFrame();
+  try { renderer.compile(scene, camera); } catch { /* nieistotne */ }
   await nextFrame();
   await nextFrame();
   intro.setProgress(1, 'Zapraszamy');
   intro.begin();
-
-  // ── wnętrza dobudowujemy w tle, już po starcie intra ───────
-  setTimeout(() => {
-    const ints = buildInteriors(scene, { night: bar.night, mats: bar.mats, nightT: night.t });
-    modes.attachInteriors(ints);
-    night.refresh();
-  }, 300);
 
   // DEV: gdy karta jest ukryta, rAF stoi — podtrzymujemy render interwałem
   // (w produkcji oszczędzamy baterię i nic nie renderujemy w tle)
@@ -379,7 +387,7 @@ async function init() {
     };
     document.addEventListener('visibilitychange', syncHiddenLoop);
     syncHiddenLoop();
-    window.__rks = { renderer, scene, camera, controls, composer, night, modes, tick, flyTo, intro, MODE_VIEWS, openAttraction, setMode };
+    window.__rks = { renderer, scene, camera, controls, composer, night, modes, tick, flyTo, intro, MODE_VIEWS, openAttraction, setMode, introFrames };
   }
 }
 

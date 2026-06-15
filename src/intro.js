@@ -2,9 +2,11 @@
 // krzywej z ujęcia z góry na bohaterski kadr baru, mgła się przeciera.
 // Sterowane CZASEM (nie scrollem) — identyczne na PC i mobile, z przyciskiem skip.
 import * as THREE from 'three';
-import { easeInOutCubic } from './tween.js';
+import { easeInOutQuart } from './tween.js';
 
-const FLY_MS = 3000; // długość najazdu kamery
+const FLY_MS = 2400;       // długość najazdu kamery — krótszy i lepiej rozłożony
+const EXIT_MS = 1050;      // „odlot" plakatu, zanim sprzątniemy #story z DOM
+const EXIT_MS_FAST = 420;  // szybkie domknięcie (pominięcie / reduced-motion)
 
 export function createIntro({ camera, controls, scene, onDone }) {
   const posCurve = new THREE.CatmullRomCurve3([
@@ -30,6 +32,9 @@ export function createIntro({ camera, controls, scene, onDone }) {
 
   let begun = false;
   let finished = false;
+  let exiting = false;
+  let cleaned = false;
+  let chromeShown = false;
   let startT = 0;
   let p = 0;
 
@@ -42,15 +47,38 @@ export function createIntro({ camera, controls, scene, onDone }) {
     }
   }
 
+  // ── „odlot" plakatu ────────────────────────────────────────
+  // Wyjście prowadzi KOMPOZYTOR (klasa .leaving → tranzycje opacity/transform w CSS),
+  // a nie wątek główny — dlatego jest płynne nawet gdy scena 3D właśnie się renderuje.
+  function playOut(fast) {
+    if (exiting) return;
+    exiting = true;
+    if (splash) {
+      splash.classList.add('leaving');
+      if (fast) splash.classList.add('leaving-fast');
+    }
+    // bezpiecznik: gdy karta jest w tle, tranzycje CSS stoją — i tak sprzątamy DOM po czasie
+    setTimeout(cleanup, fast || reduced ? EXIT_MS_FAST : EXIT_MS);
+  }
+  function cleanup() {
+    if (cleaned) return;
+    cleaned = true;
+    storyEl.remove();
+  }
+  function showChrome() {
+    if (chromeShown) return;
+    chromeShown = true;
+    document.body.classList.remove('introing'); // chrom UI wpływa łagodnie (transition w CSS)
+  }
+
   function finish() {
     if (finished) return;
     finished = true;
     p = 1;
     applyCamera(1);
     if (scene.fog) { scene.fog.near = FOG.near1; scene.fog.far = FOG.far1; }
-    document.body.classList.remove('introing');
-    storyEl.classList.add('done');
-    setTimeout(() => storyEl.remove(), 700);
+    showChrome();
+    playOut(false);
     onDone?.();
   }
 
@@ -69,17 +97,22 @@ export function createIntro({ camera, controls, scene, onDone }) {
   // ── start najazdu ──────────────────────────────────────────
   function begin() {
     if (begun || finished) return;
+    // DEV: otwórz z #hold, by zatrzymać splash do podglądu (nie odpala najazdu/zanikania).
+    // Tylko w trybie deweloperskim — w buildzie produkcyjnym ta gałąź jest usuwana.
+    if (import.meta.env.DEV && location.hash.includes('hold')) { revealSkip(); if (statusEl) statusEl.textContent = 'Podgląd splashu'; return; }
     begun = true;
     if (statusEl) statusEl.textContent = 'Zapraszamy do środka';
     revealSkip();
     if (reduced) { finish(); return; }
     startT = 0; // ustawiane przy pierwszym update
+    // plakat odlatuje od razu, gdy kamera rusza — świat odsłania się spod niego w ruchu
+    playOut(false);
   }
 
   function skip() {
     if (finished) return;
-    // szybkie domknięcie: splash znika natychmiast, kamera ląduje na celu
-    if (splash) splash.style.transition = 'opacity 0.35s ease';
+    // szybkie, jednolite domknięcie; kamera ląduje na finalnym kadrze
+    playOut(true);
     finish();
   }
 
@@ -87,11 +120,11 @@ export function createIntro({ camera, controls, scene, onDone }) {
   function update(now) {
     if (!begun || finished) return;
     if (!startT) startT = now;
-    const e = easeInOutCubic(Math.min(1, (now - startT) / FLY_MS));
+    const e = easeInOutQuart(Math.min(1, (now - startT) / FLY_MS));
     p = e;
     applyCamera(e);
-    // splash gaśnie w pierwszej połowie najazdu, płynnie odsłaniając scenę
-    if (splash) splash.style.opacity = String(Math.max(0, 1 - Math.max(0, (e - 0.08)) / 0.42));
+    // chrom UI wpływa pod koniec najazdu, „dolatując" razem z kamerą
+    if (e > 0.82) showChrome();
     if (e >= 1) finish();
   }
 
@@ -103,7 +136,7 @@ export function createIntro({ camera, controls, scene, onDone }) {
   }
 
   skipBtn?.addEventListener('click', skip);
-  splash?.addEventListener('pointerdown', (e) => { if (begun) skip(); });
+  splash?.addEventListener('pointerdown', () => { if (begun && !finished) skip(); });
 
   return {
     update,

@@ -71,22 +71,25 @@ a:hover { text-decoration: underline; }
 #story { position: fixed; inset: 0; z-index: 95; pointer-events: none; }
 #story.done { opacity: 0; transition: opacity 0.6s ease; pointer-events: none; }
 
+/* splash jest jasny (kremowy plakat) → przycisk „skip" musi być czytelny na papierze:
+   ciemny tusz na półprzezroczystym szkle, jak reszta UI (.chip / .btn-ghost) */
 .story-skip {
   position: absolute; pointer-events: auto;
   right: calc(20px + env(safe-area-inset-right));
   bottom: calc(22px + env(safe-area-inset-bottom));
   display: inline-flex; align-items: center;
   min-height: 44px; padding: 11px 20px; border-radius: 999px;
-  background: rgba(242, 233, 214, 0.12);
-  border: 1px solid rgba(242, 233, 214, 0.28);
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(33, 38, 31, 0.14);
   -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
-  color: #f2e9d6; font-family: var(--font-body);
+  color: #21261f; font-family: var(--font-body);
   font-size: 13.5px; font-weight: 650; letter-spacing: 0.01em;
+  box-shadow: 0 6px 22px rgba(30, 36, 30, 0.12);
   opacity: 0; transform: translateY(8px);
   transition: opacity 0.4s ease, transform 0.4s cubic-bezier(.3,.9,.24,1), background 0.2s;
 }
 .story-skip.show { opacity: 1; transform: none; }
-.story-skip:hover { background: rgba(242, 233, 214, 0.2); }
+.story-skip:hover { background: rgba(255, 255, 255, 0.82); }
 .story-skip:active { transform: translateY(1px) scale(0.98); }
 
 /* w czasie intra chowamy interfejs */
