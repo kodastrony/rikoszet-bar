@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://kodastrony.github.io/rikoszet-bar/sitemap.xml
+Sitemap: https://rikoszet.kodastrony.pl/sitemap.xml
